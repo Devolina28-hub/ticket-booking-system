@@ -10,7 +10,7 @@ router.post('/register', (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required' });
   }
-  const allowedRoles = ['customer', 'organiser', 'admin'];
+  const allowedRoles = ['customer', 'organiser'];
   const finalRole = allowedRoles.includes(role) ? role : 'customer';
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);

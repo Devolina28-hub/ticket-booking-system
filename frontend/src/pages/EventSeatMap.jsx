@@ -170,7 +170,7 @@ export default function EventSeatMap() {
       <div className="event-header" style={{ display: 'grid', gridTemplateColumns: '230px 1fr', gap: 28, marginBottom: 32 }}>
         <div style={{
           height: 260, borderRadius: 16, padding: 20, color: '#fff', display: 'flex', alignItems: 'end',
-          background: 'linear-gradient(145deg, #4A171D, #A2212A)',
+          background: 'linear-gradient(145deg, #221f4b, #5b5cf0)',
         }}>
           <div>
             <small style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.15em' }}>{event.venue_name?.toUpperCase()}</small>
@@ -216,7 +216,7 @@ export default function EventSeatMap() {
             <div className="row-between" style={{ marginBottom: 10 }}>
               <h2>Select your seats</h2>
               {remainingSec !== null && (
-                <span className="pill-badge crimson">Held for {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}</span>
+                <span className="pill-badge accent">Held for {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}</span>
               )}
             </div>
             <SeatGrid seats={seats} selectedIds={selected.map((s) => s.id)} onToggle={toggleSeat} />

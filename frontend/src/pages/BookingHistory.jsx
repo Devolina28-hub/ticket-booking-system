@@ -47,7 +47,7 @@ export default function BookingHistory() {
             <div className="panel" key={b.id} style={{ marginBottom: 0 }}>
               <div className="row-between">
                 <div>
-                  <span className={`pill-badge ${b.status === 'cancelled' ? '' : 'crimson'}`}>
+                  <span className={`pill-badge ${b.status === 'cancelled' ? '' : 'accent'}`}>
                     {b.status}
                   </span>
                   <h3 style={{ margin: '8px 0 4px' }}>{b.title}</h3>

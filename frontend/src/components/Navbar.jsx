@@ -12,7 +12,10 @@ export default function Navbar({ user, setUser }) {
 
   return (
     <nav className="navbar">
-      <Link to="/" className="brand">cine</Link>
+      <Link to="/" className="brand">
+        <span className="brand-dot" />
+        <span className="brand-text">Encore</span>
+      </Link>
       <ul className="nav-links">
         <li><NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''}>Browse</NavLink></li>
         {user?.role === 'customer' && (
@@ -37,7 +40,7 @@ export default function Navbar({ user, setUser }) {
         ) : (
           <>
             <Link to="/login" className="btn btn-secondary btn-sm">Log in</Link>
-            <Link to="/register" className="btn btn-primary btn-sm">Sign up</Link>
+            <Link to="/login" className="btn btn-primary btn-sm">Sign up</Link>
           </>
         )}
       </div>

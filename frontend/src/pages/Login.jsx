@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { api, saveSession } from '../api.js';
+import AuthLayout from '../components/AuthLayout.jsx';
+
+const ROLE_LABELS = { customer: 'Customer', organiser: 'Organiser', admin: 'Admin' };
+const DEMO_EMAILS = { customer: 'customer@example.com', organiser: 'organiser@example.com', admin: 'admin@example.com' };
 
 export default function Login({ setUser }) {
-  const [email, setEmail] = useState('customer@example.com');
+  const { role } = useParams();
+  const roleLabel = ROLE_LABELS[role] || 'Customer';
+  const [email, setEmail] = useState(DEMO_EMAILS[role] || '');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,6 +21,11 @@ export default function Login({ setUser }) {
     setLoading(true);
     try {
       const data = await api.login({ email, password });
+      if (data.user.role !== role) {
+        setError(`This account is registered as ${data.user.role}, not ${roleLabel.toLowerCase()}. Try the ${data.user.role} portal instead.`);
+        setLoading(false);
+        return;
+      }
       saveSession(data.token, data.user);
       setUser(data.user);
       navigate('/');
@@ -26,30 +37,39 @@ export default function Login({ setUser }) {
   }
 
   return (
-    <div className="panel" style={{ maxWidth: 440, margin: '40px auto' }}>
-      <p className="eyebrow">Welcome back</p>
-      <h2>Log in to CinePass</h2>
-      <p className="muted">Book seats, join waitlists, and manage your tickets.</p>
+    <AuthLayout role={role}>
+      <p className="eyebrow">{roleLabel} log in</p>
+      <h2 style={{ marginBottom: 6 }}>Welcome back</h2>
+      <p className="muted" style={{ marginBottom: 24 }}>Enter your details to access your {roleLabel.toLowerCase()} account.</p>
       {error && <div className="alert alert-error">{error}</div>}
       <form onSubmit={onSubmit} className="stack">
         <div className="field">
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <label>Email address</label>
+          <div className="field-icon-wrap">
+            <span className="field-icon">✉️</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
         </div>
         <div className="field">
           <label>Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <div className="field-icon-wrap">
+            <span className="field-icon">🔒</span>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
         </div>
         <button className="btn btn-primary btn-block" disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</button>
       </form>
-      <p className="muted" style={{ marginTop: 16 }}>
-        No account? <Link to="/register">Sign up</Link>
+      {role !== 'admin' && (
+        <p className="muted" style={{ marginTop: 16 }}>
+          Don't have an account? <Link to={`/register/${role}`}>Sign up</Link>
+        </p>
+      )}
+      <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+        <Link to="/login">← Choose a different portal</Link>
       </p>
       <hr className="divider" />
-      <p className="label-sm">Demo accounts (password123)</p>
-      <p className="muted" style={{ fontSize: '0.85rem' }}>
-        admin@example.com · organiser@example.com · customer@example.com
-      </p>
-    </div>
+      <p className="label-sm">Demo account (password123)</p>
+      <p className="muted" style={{ fontSize: '0.85rem' }}>{DEMO_EMAILS[role] || DEMO_EMAILS.customer}</p>
+    </AuthLayout>
   );
 }

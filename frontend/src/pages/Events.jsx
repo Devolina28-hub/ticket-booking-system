@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 
-const POSTER_CLASSES = ['', 'p2', 'p3', 'p4'];
+const POSTER_CLASSES = ['p1', 'p2', 'p3', 'p4'];
 
 export default function Events() {
   const [events, setEvents] = useState([]);
@@ -101,7 +101,7 @@ export default function Events() {
                     <div className="row-between" style={{ marginTop: 10 }}>
                       {minPrice !== null && <div className="event-price">From ${minPrice.toFixed(0)}</div>}
                       {soldOut ? (
-                        <span className="pill-badge crimson">Sold out</span>
+                        <span className="pill-badge danger">Sold out</span>
                       ) : (
                         <span className="pill-badge">{totalAvailable} left</span>
                       )}

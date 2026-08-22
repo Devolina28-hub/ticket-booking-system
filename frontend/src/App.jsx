@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Events from './pages/Events.jsx';
 import EventSeatMap from './pages/EventSeatMap.jsx';
+import RoleSelect from './pages/RoleSelect.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import BookingHistory from './pages/BookingHistory.jsx';
@@ -26,8 +27,11 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Events />} />
         <Route path="/events/:id" element={<EventSeatMap />} />
-        <Route path="/login" element={<Login setUser={setUser} />} />
-        <Route path="/register" element={<Register setUser={setUser} />} />
+
+        <Route path="/login" element={<RoleSelect />} />
+        <Route path="/login/:role" element={<Login setUser={setUser} />} />
+        <Route path="/register/:role" element={<Register setUser={setUser} />} />
+
         <Route
           path="/my-bookings"
           element={<RequireRole user={user} roles={['customer']}><BookingHistory /></RequireRole>}

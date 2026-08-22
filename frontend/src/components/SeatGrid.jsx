@@ -38,9 +38,9 @@ export default function SeatGrid({ seats, selectedIds, onToggle }) {
       </div>
       <div className="legend">
         <div className="legend-item"><span className="legend-swatch" style={{ background: 'var(--green)' }} /> Available</div>
-        <div className="legend-item"><span className="legend-swatch" style={{ background: 'var(--dark)' }} /> Selected</div>
+        <div className="legend-item"><span className="legend-swatch" style={{ background: 'var(--indigo)' }} /> Selected</div>
         <div className="legend-item"><span className="legend-swatch" style={{ background: 'var(--amber)' }} /> Held</div>
-        <div className="legend-item"><span className="legend-swatch" style={{ background: 'var(--crimson)' }} /> Booked</div>
+        <div className="legend-item"><span className="legend-swatch" style={{ background: 'var(--red)' }} /> Booked</div>
       </div>
     </div>
   );
