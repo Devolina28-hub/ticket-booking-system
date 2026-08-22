@@ -12,15 +12,12 @@ export default function Navbar({ user, setUser }) {
 
   return (
     <nav className="navbar">
-      <Link to="/" className="brand">
-        <span className="brand-dot" />
-        Encore
-      </Link>
+      <Link to="/" className="brand">cine</Link>
       <ul className="nav-links">
         <li><NavLink to="/" end className={({isActive}) => isActive ? 'active' : ''}>Browse</NavLink></li>
         {user?.role === 'customer' && (
           <>
-            <li><NavLink to="/my-bookings" className={({isActive}) => isActive ? 'active' : ''}>My Bookings</NavLink></li>
+            <li><NavLink to="/my-bookings" className={({isActive}) => isActive ? 'active' : ''}>My Tickets</NavLink></li>
             <li><NavLink to="/my-waitlist" className={({isActive}) => isActive ? 'active' : ''}>Waitlist</NavLink></li>
           </>
         )}
@@ -35,7 +32,7 @@ export default function Navbar({ user, setUser }) {
         {user ? (
           <>
             <span className="pill-badge">{user.name} · {user.role}</span>
-            <button className="btn btn-secondary btn-sm" onClick={logout}>Log out</button>
+            <button className="btn btn-dark btn-sm" onClick={logout}>Log out</button>
           </>
         ) : (
           <>

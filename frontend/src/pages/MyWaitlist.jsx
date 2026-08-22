@@ -50,6 +50,7 @@ export default function MyWaitlist() {
   return (
     <div>
       <div className="panel">
+        <p className="eyebrow">Waiting for a seat</p>
         <h1>My waitlist</h1>
         <p className="muted">When a seat opens up, you'll get a time-limited offer here and by email.</p>
       </div>

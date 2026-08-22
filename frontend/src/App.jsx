@@ -22,9 +22,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="blob blob-1" />
-      <div className="blob blob-2" />
-      <div className="blob blob-3" />
       <Navbar user={user} setUser={setUser} />
       <Routes>
         <Route path="/" element={<Events />} />

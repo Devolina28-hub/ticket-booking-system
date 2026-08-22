@@ -30,6 +30,7 @@ export default function Register({ setUser }) {
 
   return (
     <div className="panel" style={{ maxWidth: 440, margin: '40px auto' }}>
+      <p className="eyebrow">Join CinePass</p>
       <h2>Create your account</h2>
       <p className="muted">Book tickets for movies and concerts in a few clicks.</p>
       {error && <div className="alert alert-error">{error}</div>}

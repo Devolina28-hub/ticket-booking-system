@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 
+const POSTER_CLASSES = ['', 'p2', 'p3', 'p4'];
+
 export default function Events() {
   const [events, setEvents] = useState([]);
   const [type, setType] = useState('');
@@ -23,66 +25,94 @@ export default function Events() {
 
   useEffect(() => { load(); }, [type]);
 
+  const featured = events[0];
+
   return (
     <div>
-      <div className="panel">
-        <h1>Find your next night out</h1>
-        <p className="muted">Browse movies and concerts, pick your seats on a live seat map, and get a QR ticket by email.</p>
-        <div className="row-between" style={{ marginTop: 20 }}>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {['', 'movie', 'concert', 'event'].map((t) => (
-              <button
-                key={t}
-                className={`btn btn-sm ${type === t ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setType(t)}
-              >
-                {t === '' ? 'All' : t[0].toUpperCase() + t.slice(1) + 's'}
-              </button>
-            ))}
-          </div>
-          <form onSubmit={(e) => { e.preventDefault(); load(); }} style={{ display: 'flex', gap: 8 }}>
+      <section className="hero">
+        <div>
+          <p className="eyebrow">Your seat. Your experience.</p>
+          <h1>Find your next <em>moment.</em></h1>
+          <p style={{ maxWidth: 480 }}>
+            Discover movies, concerts and live events. Choose your seat, secure it for a few minutes,
+            and get your digital QR ticket instantly.
+          </p>
+          <form
+            onSubmit={(e) => { e.preventDefault(); load(); }}
+            style={{ display: 'flex', background: '#fff', border: '1px solid var(--line)', padding: 7, borderRadius: 13, marginTop: 26, boxShadow: 'var(--shadow)', maxWidth: 480 }}
+          >
             <input
-              placeholder="Search title…"
+              placeholder="Search movies, concerts & events…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              style={{ padding: '10px 16px', borderRadius: 999, border: '1px solid rgba(98,61,112,0.25)', background: 'rgba(255,255,255,0.6)' }}
+              style={{ flex: 1, border: 0, outline: 0, padding: '12px 14px', background: 'transparent' }}
             />
-            <button className="btn btn-secondary btn-sm">Search</button>
+            <button className="btn btn-dark">Search</button>
           </form>
         </div>
-      </div>
-
-      {loading ? (
-        <div className="center-text"><div className="spinner" style={{ margin: '40px auto' }} /></div>
-      ) : events.length === 0 ? (
-        <div className="panel center-text"><p>No events found. Try a different filter.</p></div>
-      ) : (
-        <div className="grid grid-3">
-          {events.map((ev) => {
-            const totalAvailable = ev.availability.reduce((sum, a) => sum + a.available, 0);
-            const soldOut = totalAvailable === 0;
-            return (
-              <Link to={`/events/${ev.id}`} className="event-card" key={ev.id}>
-                <span className="pill-badge" style={{ marginBottom: 10, display: 'inline-block' }}>{ev.type}</span>
-                <h3 style={{ marginBottom: 4 }}>{ev.title}</h3>
-                <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 12 }}>
-                  {ev.venue_name} · {ev.event_date} at {ev.event_time}
-                </p>
-                <div className="row-between">
-                  <span className="label-sm">
-                    {ev.pricing.map((p) => `${p.category} $${p.price}`).join(' · ')}
-                  </span>
-                  {soldOut ? (
-                    <span className="pill-badge" style={{ background: 'rgba(178,40,60,0.15)', color: '#7a1f30' }}>Sold out</span>
-                  ) : (
-                    <span className="pill-badge">{totalAvailable} seats left</span>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+        <div className="hero-art">
+          <div className="hero-card">
+            <small>FEATURED EXPERIENCE</small>
+            <h2>{featured ? featured.title : 'Discover something new'}</h2>
+            <p>{featured ? `${featured.event_date} · ${featured.event_time}` : 'Browse what’s on right now'}</p>
+          </div>
         </div>
-      )}
+      </section>
+
+      <section>
+        <div className="row-between" style={{ marginBottom: 20 }}>
+          <h2>Trending now</h2>
+          <span className="muted" style={{ fontSize: 13 }}>Curated for you</span>
+        </div>
+        <div className="filters">
+          {['', 'movie', 'concert', 'event'].map((t) => (
+            <button
+              key={t}
+              className={`filter-pill ${type === t ? 'active' : ''}`}
+              onClick={() => setType(t)}
+            >
+              {t === '' ? 'All' : t[0].toUpperCase() + t.slice(1) + 's'}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="center-text"><div className="spinner" style={{ margin: '40px auto' }} /></div>
+        ) : events.length === 0 ? (
+          <div className="panel center-text"><p>No events found. Try a different filter.</p></div>
+        ) : (
+          <div className="grid grid-4">
+            {events.map((ev, i) => {
+              const totalAvailable = ev.availability.reduce((sum, a) => sum + a.available, 0);
+              const soldOut = totalAvailable === 0;
+              const posterClass = POSTER_CLASSES[i % POSTER_CLASSES.length];
+              const minPrice = ev.pricing.length ? Math.min(...ev.pricing.map((p) => p.price)) : null;
+              return (
+                <Link to={`/events/${ev.id}`} className="event-card" key={ev.id}>
+                  <div className={`poster ${posterClass}`}>
+                    <div className="poster-content">
+                      <small>{ev.type.toUpperCase()}</small>
+                      <strong>{ev.title}</strong>
+                    </div>
+                  </div>
+                  <div className="event-info">
+                    <h3>{ev.title}</h3>
+                    <p>{ev.venue_name} · {ev.event_date} · {ev.event_time}</p>
+                    <div className="row-between" style={{ marginTop: 10 }}>
+                      {minPrice !== null && <div className="event-price">From ${minPrice.toFixed(0)}</div>}
+                      {soldOut ? (
+                        <span className="pill-badge crimson">Sold out</span>
+                      ) : (
+                        <span className="pill-badge">{totalAvailable} left</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

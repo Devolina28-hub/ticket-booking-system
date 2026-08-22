@@ -34,6 +34,7 @@ export default function BookingHistory() {
   return (
     <div>
       <div className="panel">
+        <p className="eyebrow">Your tickets</p>
         <h1>My bookings</h1>
         <p className="muted">Your confirmed and past tickets.</p>
       </div>
@@ -46,7 +47,7 @@ export default function BookingHistory() {
             <div className="panel" key={b.id} style={{ marginBottom: 0 }}>
               <div className="row-between">
                 <div>
-                  <span className={`pill-badge`} style={b.status === 'cancelled' ? { background: 'rgba(178,40,60,0.15)', color: '#7a1f30' } : {}}>
+                  <span className={`pill-badge ${b.status === 'cancelled' ? '' : 'crimson'}`}>
                     {b.status}
                   </span>
                   <h3 style={{ margin: '8px 0 4px' }}>{b.title}</h3>

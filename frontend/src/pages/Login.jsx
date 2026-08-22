@@ -27,8 +27,9 @@ export default function Login({ setUser }) {
 
   return (
     <div className="panel" style={{ maxWidth: 440, margin: '40px auto' }}>
-      <h2>Welcome back</h2>
-      <p className="muted">Log in to book seats, join waitlists, and manage your tickets.</p>
+      <p className="eyebrow">Welcome back</p>
+      <h2>Log in to CinePass</h2>
+      <p className="muted">Book seats, join waitlists, and manage your tickets.</p>
       {error && <div className="alert alert-error">{error}</div>}
       <form onSubmit={onSubmit} className="stack">
         <div className="field">

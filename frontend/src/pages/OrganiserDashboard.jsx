@@ -48,7 +48,8 @@ export default function OrganiserDashboard() {
   return (
     <div>
       <div className="panel">
-        <h1>Organiser dashboard</h1>
+        <p className="eyebrow">Organiser</p>
+        <h1>Dashboard</h1>
         <p className="muted">Create movie or event listings and track revenue.</p>
       </div>
 

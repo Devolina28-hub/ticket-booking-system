@@ -40,6 +40,7 @@ export default function AdminVenues() {
   return (
     <div>
       <div className="panel">
+        <p className="eyebrow">Admin</p>
         <h1>Manage venues</h1>
         <p className="muted">Create venues and define their seat layout by row, count, and category.</p>
       </div>
