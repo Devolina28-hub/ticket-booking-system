@@ -32,7 +32,7 @@ export default function AuthLayout({ role, children }) {
       <div className="auth-form-side">
         <div className="auth-form-card">
           <Link to="/" className="brand">
-            <span className="brand-dot" />
+            <img src="/images/encore-logo.svg" alt="" className="brand-dot" />
             <span className="brand-text">Encore</span>
           </Link>
           {children}

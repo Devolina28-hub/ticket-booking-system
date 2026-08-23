@@ -86,8 +86,9 @@ button, input, select, textarea { font: inherit; }
 }
 .brand-dot {
   width: 30px; height: 30px; border-radius: 9px;
-  background: var(--grad-primary);
   display: inline-block;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .brand-text {
   font-family: var(--font-cursive);

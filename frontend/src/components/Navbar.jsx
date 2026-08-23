@@ -18,7 +18,7 @@ export default function Navbar({ user, setUser }) {
   return (
     <nav className="navbar">
       <Link to="/" className="brand" onClick={() => setMenuOpen(false)}>
-        <span className="brand-dot" />
+        <img src="/images/encore-logo.svg" alt="" className="brand-dot" />
         <span className="brand-text">Encore</span>
       </Link>
 
