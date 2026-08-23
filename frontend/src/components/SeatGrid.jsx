@@ -1,4 +1,4 @@
-export default function SeatGrid({ seats, selectedIds, onToggle }) {
+export default function SeatGrid({ seats, selectedIds, onToggle, disabled: previewOnly = false }) {
   const rows = {};
   for (const s of seats) {
     if (!rows[s.row_label]) rows[s.row_label] = [];
@@ -10,7 +10,7 @@ export default function SeatGrid({ seats, selectedIds, onToggle }) {
     <div>
       <div className="screen-label">Screen this way</div>
       <div className="screen" />
-      <div className="seat-map">
+      <div className="seat-map" style={previewOnly ? { opacity: 0.7 } : undefined}>
         {rowLabels.map((label) => (
           <div className="seat-row" key={label}>
             <div className="seat-row-label">{label}</div>
@@ -19,14 +19,15 @@ export default function SeatGrid({ seats, selectedIds, onToggle }) {
               .map((seat) => {
                 const isSelected = selectedIds.includes(seat.id);
                 const status = isSelected ? 'selected' : seat.status;
-                const disabled = seat.status !== 'available' && !isSelected;
+                const disabled = previewOnly || (seat.status !== 'available' && !isSelected);
                 return (
                   <button
                     key={seat.id}
                     className="seat"
                     data-status={status}
                     disabled={disabled}
-                    title={`${seat.row_label}${seat.seat_number} · ${seat.category} · ${seat.status}`}
+                    style={previewOnly ? { cursor: 'not-allowed' } : undefined}
+                    title={previewOnly ? 'Booking disabled for this account' : `${seat.row_label}${seat.seat_number} · ${seat.category} · ${seat.status}`}
                     onClick={() => onToggle(seat)}
                   >
                     {seat.seat_number}

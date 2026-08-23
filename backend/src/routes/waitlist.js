@@ -1,5 +1,5 @@
 const express = require('express');
-const db = require('../db');
+const { query, queryOne, withTransaction } = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 const { generateBookingRef, generateQrDataUrl } = require('../services/qr');
 const { sendBookingConfirmation } = require('../services/email');
@@ -8,44 +8,61 @@ const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
 const router = express.Router();
 
 // Customer joins the waitlist for a sold-out category on an event.
-router.post('/', requireAuth, requireRole('customer'), (req, res) => {
-  const { event_id, category } = req.body;
-  if (!event_id || !category) return res.status(400).json({ error: 'event_id and category are required' });
+router.post('/', requireAuth, requireRole('customer'), async (req, res) => {
+  try {
+    const { event_id, category } = req.body;
+    if (!event_id || !category) return res.status(400).json({ error: 'event_id and category are required' });
 
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(event_id);
-  if (!event) return res.status(404).json({ error: 'Event not found' });
+    const event = await queryOne('SELECT * FROM events WHERE id = $1', [event_id]);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
 
-  const existing = db
-    .prepare(
-      `SELECT * FROM waitlist WHERE event_id = ? AND category = ? AND customer_id = ? AND status IN ('waiting','offered')`
-    )
-    .get(event_id, category, req.user.id);
-  if (existing) return res.status(409).json({ error: 'Already on the waitlist for this category', entry: existing });
+    const existing = await queryOne(
+      `SELECT * FROM waitlist WHERE event_id = $1 AND category = $2 AND customer_id = $3 AND status IN ('waiting','offered')`,
+      [event_id, category, req.user.id]
+    );
+    if (existing) return res.status(409).json({ error: 'Already on the waitlist for this category', entry: existing });
 
-  const info = db
-    .prepare('INSERT INTO waitlist (event_id, category, customer_id, status) VALUES (?, ?, ?, \'waiting\')')
-    .run(event_id, category, req.user.id);
+    let inserted;
+    try {
+      inserted = await queryOne(
+        `INSERT INTO waitlist (event_id, category, customer_id, status) VALUES ($1, $2, $3, 'waiting') RETURNING id, joined_at`,
+        [event_id, category, req.user.id]
+      );
+    } catch (err) {
+      // Race condition fallback: the partial unique index blocks a duplicate
+      // active entry even if two requests slipped past the check above at
+      // the same instant.
+      if (err.code === '23505') {
+        return res.status(409).json({ error: 'Already on the waitlist for this category' });
+      }
+      throw err;
+    }
 
-  const position = db
-    .prepare(
-      `SELECT COUNT(*) as pos FROM waitlist
-       WHERE event_id = ? AND category = ? AND status = 'waiting' AND joined_at <= (SELECT joined_at FROM waitlist WHERE id = ?)`
-    )
-    .get(event_id, category, info.lastInsertRowid).pos;
+    const posRow = await queryOne(
+      `SELECT COUNT(*)::int as pos FROM waitlist
+       WHERE event_id = $1 AND category = $2 AND status = 'waiting' AND joined_at <= $3`,
+      [event_id, category, inserted.joined_at]
+    );
 
-  res.status(201).json({ id: info.lastInsertRowid, position });
+    res.status(201).json({ id: inserted.id, position: posRow.pos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Customer's waitlist entries
-router.get('/my', requireAuth, requireRole('customer'), (req, res) => {
-  releaseExpiredHoldsNow();
-  const entries = db
-    .prepare(
+router.get('/my', requireAuth, requireRole('customer'), async (req, res) => {
+  try {
+    await releaseExpiredHoldsNow();
+    const entries = await query(
       `SELECT w.*, e.title, e.event_date, e.event_time FROM waitlist w
-       JOIN events e ON e.id = w.event_id WHERE w.customer_id = ? ORDER BY w.joined_at DESC`
-    )
-    .all(req.user.id);
-  res.json({ entries });
+       JOIN events e ON e.id = w.event_id WHERE w.customer_id = $1 ORDER BY w.joined_at DESC`,
+      [req.user.id]
+    );
+    res.json({ entries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**
@@ -55,52 +72,52 @@ router.get('/my', requireAuth, requireRole('customer'), (req, res) => {
  * not expired (the sweeper would otherwise have already cascaded it away).
  */
 router.post('/:id/complete', requireAuth, requireRole('customer'), async (req, res) => {
-  releaseExpiredHoldsNow();
-  const entry = db.prepare('SELECT * FROM waitlist WHERE id = ?').get(req.params.id);
-  if (!entry) return res.status(404).json({ error: 'Waitlist entry not found' });
-  if (entry.customer_id !== req.user.id) return res.status(403).json({ error: 'Not your waitlist entry' });
-  if (entry.status !== 'offered') return res.status(409).json({ error: `Offer is ${entry.status}, not available` });
-
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(entry.event_id);
-  const bookingRef = generateBookingRef();
-  let bookingId;
-
   try {
-    const trx = db.transaction(() => {
-      const seat = db
-        .prepare(`SELECT * FROM event_seats WHERE id = ? AND status = 'offered' AND held_by = ?`)
-        .get(entry.offered_seat_id, req.user.id);
+    await releaseExpiredHoldsNow();
+    const entry = await queryOne('SELECT * FROM waitlist WHERE id = $1', [req.params.id]);
+    if (!entry) return res.status(404).json({ error: 'Waitlist entry not found' });
+    if (entry.customer_id !== req.user.id) return res.status(403).json({ error: 'Not your waitlist entry' });
+    if (entry.status !== 'offered') return res.status(409).json({ error: `Offer is ${entry.status}, not available` });
+
+    const event = await queryOne('SELECT * FROM events WHERE id = $1', [entry.event_id]);
+    const bookingRef = generateBookingRef();
+
+    const { bookingId, seat, total } = await withTransaction(async (trx) => {
+      const seat = await trx.queryOne(
+        `SELECT * FROM event_seats WHERE id = $1 AND status = 'offered' AND held_by = $2`,
+        [entry.offered_seat_id, req.user.id]
+      );
       if (!seat) throw new Error('Offer expired or seat no longer reserved for you');
 
-      const pricing = db
-        .prepare('SELECT price FROM event_pricing WHERE event_id = ? AND category = ?')
-        .get(entry.event_id, seat.category);
-      const total = pricing ? pricing.price : 0;
+      const pricing = await trx.queryOne(
+        'SELECT price FROM event_pricing WHERE event_id = $1 AND category = $2',
+        [entry.event_id, seat.category]
+      );
+      const total = pricing ? Number(pricing.price) : 0;
 
-      const bookingInfo = db
-        .prepare(`INSERT INTO bookings (booking_ref, event_id, customer_id, status, total_amount) VALUES (?, ?, ?, 'confirmed', ?)`)
-        .run(bookingRef, entry.event_id, req.user.id, total);
-      bookingId = bookingInfo.lastInsertRowid;
+      const bookingRow = await trx.queryOne(
+        `INSERT INTO bookings (booking_ref, event_id, customer_id, status, total_amount) VALUES ($1, $2, $3, 'confirmed', $4) RETURNING id`,
+        [bookingRef, entry.event_id, req.user.id, total]
+      );
 
-      db.prepare('INSERT INTO booking_seats (booking_id, event_seat_id) VALUES (?, ?)').run(bookingId, seat.id);
+      await trx.query('INSERT INTO booking_seats (booking_id, event_seat_id) VALUES ($1, $2)', [bookingRow.id, seat.id]);
 
-      const seatUpdate = db
-        .prepare(
-          `UPDATE event_seats SET status = 'booked', held_by = NULL, hold_expires_at = NULL, booking_id = ?
-           WHERE id = ? AND status = 'offered' AND held_by = ?`
-        )
-        .run(bookingId, seat.id, req.user.id);
-      if (seatUpdate.changes === 0) throw new Error('Offer expired while completing booking');
+      const updated = await trx.query(
+        `UPDATE event_seats SET status = 'booked', held_by = NULL, hold_expires_at = NULL, booking_id = $1
+         WHERE id = $2 AND status = 'offered' AND held_by = $3
+         RETURNING id`,
+        [bookingRow.id, seat.id, req.user.id]
+      );
+      if (updated.length === 0) throw new Error('Offer expired while completing booking');
 
-      db.prepare(`UPDATE waitlist SET status = 'booked' WHERE id = ?`).run(entry.id);
+      await trx.query(`UPDATE waitlist SET status = 'booked' WHERE id = $1`, [entry.id]);
 
-      return { seat, total };
+      return { bookingId: bookingRow.id, seat, total };
     });
 
-    const { seat, total } = trx();
-    const customer = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    const qrDataUrl = await generateQrDataUrl({ bookingRef, eventId: entry.event_id, customerId: req.user.id });
-    db.prepare('UPDATE bookings SET qr_data_url = ? WHERE id = ?').run(qrDataUrl, bookingId);
+    const customer = await queryOne('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    const qrDataUrl = await generateQrDataUrl(bookingRef);
+    await query('UPDATE bookings SET qr_data_url = $1 WHERE id = $2', [qrDataUrl, bookingId]);
 
     sendBookingConfirmation({
       to: customer.email,

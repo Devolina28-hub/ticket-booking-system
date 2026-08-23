@@ -30,26 +30,29 @@ The core guarantee — two customers can never both hold or book the same seat �
 from treating every state transition as a **conditional UPDATE**, not a read-then-write:
 
 ```sql
-UPDATE event_seats SET status='held', held_by=?, hold_expires_at=?
-WHERE id=? AND event_id=? AND status='available';
+UPDATE event_seats SET status='held', held_by=$1, hold_expires_at=$2
+WHERE id=$3 AND event_id=$4 AND status='available'
+RETURNING id;
 ```
 
-If the row is no longer `available` when this executes, `changes()` returns 0 and the
-request fails cleanly with `409 Conflict`. There is no "check status, then write"
+If the row is no longer `available` when this executes, the query returns zero rows and
+the request fails cleanly with `409 Conflict`. There is no "check status, then write"
 window for a race condition to exploit, because the check and the write are the same
 atomic statement. This pattern is reused identically for hold → booked, cancel →
 available, and available → offered (waitlist), so every transition in the system has
 the same safety property.
 
-SQLite is configured in **WAL mode** with a `busy_timeout`, meaning concurrent writers
-are queued and serialized by the engine rather than raising immediate lock errors, so
-two near-simultaneous hold requests for the same seat are resolved deterministically:
-one wins, one gets a clear 409. Multi-seat holds are wrapped in a single transaction,
-so a customer either secures every seat they asked for or none of them — no partial
-holds that leave orphaned reservations. This was validated with a live test: after
-customer A holds seats A1–A2, customer B's request for the same seats returns
-`409 — Seat A1 is held`, and the conflict is resolved without any seat being
-double-assigned.
+The database (Postgres, hosted on Neon) serializes concurrent `UPDATE` statements
+targeting the same row under the hood: if two requests race for the same seat, the
+second `UPDATE` blocks until the first transaction commits or rolls back, then
+re-evaluates its `WHERE status='available'` clause against the now-committed row — so
+it correctly finds zero matching rows with no explicit locking code required on the
+application side. Multi-seat holds are wrapped in a single transaction, so a customer
+either secures every seat they asked for or none of them — no partial holds that leave
+orphaned reservations. This was validated with a genuinely simultaneous test (both
+requests fired via `Promise.all`, not sequentially): exactly one request returned `200`,
+the other `409`, and the seat's final state in the database showed it held by exactly
+one customer, with no double-assignment.
 
 ## Waitlist auto-assignment flow
 

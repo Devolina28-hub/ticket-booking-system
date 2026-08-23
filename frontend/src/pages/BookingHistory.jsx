@@ -55,7 +55,7 @@ export default function BookingHistory() {
                   <p className="muted" style={{ margin: '4px 0' }}>
                     Seats: {b.seats.map((s) => `${s.row_label}${s.seat_number} (${s.category})`).join(', ')}
                   </p>
-                  <p style={{ fontWeight: 700, margin: 0 }}>${b.total_amount.toFixed(2)} · Ref {b.booking_ref}</p>
+                  <p style={{ fontWeight: 700, margin: 0 }}>₹{b.total_amount.toFixed(0)} · Ref {b.booking_ref}</p>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
                   {b.qr_data_url && <img src={b.qr_data_url} alt="QR" style={{ width: 90, borderRadius: 10 }} />}

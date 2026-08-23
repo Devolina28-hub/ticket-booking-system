@@ -50,6 +50,11 @@ export const api = {
   joinWaitlist: (payload) => request('/waitlist', { method: 'POST', body: payload }),
   myWaitlist: () => request('/waitlist/my'),
   completeWaitlistOffer: (id) => request(`/waitlist/${id}/complete`, { method: 'POST' }),
+
+  verifyTicket: async (bookingRef) => {
+    const res = await fetch(BASE + `/bookings/verify/${bookingRef}`);
+    return res.json();
+  },
 };
 
 export function saveSession(token, user) {

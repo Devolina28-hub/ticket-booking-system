@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { useEffect, useRef, useState } from 'react';
+import { api, getUser } from '../api.js';
 
 export default function OrganiserDashboard() {
+  const user = getUser();
   const [venues, setVenues] = useState([]);
   const [events, setEvents] = useState([]);
   const [form, setForm] = useState({ title: '', description: '', type: 'movie', venue_id: '', event_date: '', event_time: '' });
-  const [pricing, setPricing] = useState([{ category: 'Premium', price: 25 }, { category: 'Standard', price: 15 }]);
+  const [pricing, setPricing] = useState([{ category: 'Premium', price: 500 }, { category: 'Standard', price: 300 }]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [summaryError, setSummaryError] = useState('');
   const [selectedSummary, setSelectedSummary] = useState(null);
+  const [loadingSummaryId, setLoadingSummaryId] = useState(null);
+  const summaryRef = useRef(null);
 
   async function load() {
     const [venueData, eventData] = await Promise.all([api.listVenues(), api.listEvents()]);
@@ -17,6 +21,11 @@ export default function OrganiserDashboard() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Admins see every event's revenue; organisers only see their own listings here,
+  // since the backend correctly rejects viewing another organiser's revenue (403) --
+  // this filter keeps the UI from ever showing a "view revenue" button that would fail.
+  const myEvents = user?.role === 'admin' ? events : events.filter((ev) => ev.organiser_id === user?.id);
 
   function updateForm(key, value) { setForm((f) => ({ ...f, [key]: value })); }
   function updatePricing(i, key, value) {
@@ -41,8 +50,20 @@ export default function OrganiserDashboard() {
   }
 
   async function viewSummary(eventId) {
-    const data = await api.eventSummary(eventId);
-    setSelectedSummary(data);
+    setSummaryError('');
+    setLoadingSummaryId(eventId);
+    try {
+      const data = await api.eventSummary(eventId);
+      setSelectedSummary(data);
+      // Auto-scroll to the revenue section once it's rendered, instead of
+      // leaving the user to scroll down manually to find it.
+      setTimeout(() => summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    } catch (err) {
+      setSelectedSummary(null);
+      setSummaryError(err.message);
+    } finally {
+      setLoadingSummaryId(null);
+    }
   }
 
   return (
@@ -94,7 +115,7 @@ export default function OrganiserDashboard() {
             </div>
           </div>
 
-          <p className="label-sm">Per-category pricing</p>
+          <p className="label-sm">Per-category pricing (₹)</p>
           {pricing.map((p, i) => (
             <div className="grid grid-2" key={i}>
               <div className="field">
@@ -102,8 +123,8 @@ export default function OrganiserDashboard() {
                 <input value={p.category} onChange={(e) => updatePricing(i, 'category', e.target.value)} required />
               </div>
               <div className="field">
-                <label>Price ($)</label>
-                <input type="number" min="0" step="0.01" value={p.price} onChange={(e) => updatePricing(i, 'price', e.target.value)} required />
+                <label>Price (₹)</label>
+                <input type="number" min="0" step="1" value={p.price} onChange={(e) => updatePricing(i, 'price', e.target.value)} required />
               </div>
             </div>
           ))}
@@ -118,23 +139,30 @@ export default function OrganiserDashboard() {
 
       <div className="panel">
         <h2>Your listings</h2>
-        <div className="stack">
-          {events.map((ev) => (
-            <div key={ev.id} className="row-between" style={{ padding: '12px 0', borderBottom: '1px solid rgba(98,61,112,0.1)' }}>
-              <div>
-                <strong>{ev.title}</strong>
-                <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>{ev.venue_name} · {ev.event_date}</p>
+        {summaryError && <div className="alert alert-error">{summaryError}</div>}
+        {myEvents.length === 0 ? (
+          <p className="muted">You haven't created any listings yet — use the form above.</p>
+        ) : (
+          <div className="stack">
+            {myEvents.map((ev) => (
+              <div key={ev.id} className="row-between" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+                <div>
+                  <strong>{ev.title}</strong>
+                  <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>{ev.venue_name} · {ev.event_date}</p>
+                </div>
+                <button className="btn btn-secondary btn-sm" disabled={loadingSummaryId === ev.id} onClick={() => viewSummary(ev.id)}>
+                  {loadingSummaryId === ev.id ? 'Loading…' : 'View revenue'}
+                </button>
               </div>
-              <button className="btn btn-secondary btn-sm" onClick={() => viewSummary(ev.id)}>View revenue</button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {selectedSummary && (
-        <div className="panel">
+        <div className="panel" ref={summaryRef}>
           <h2>{selectedSummary.event.title} — Summary</h2>
-          <p style={{ fontWeight: 700, fontSize: '1.3rem' }}>Revenue: ${selectedSummary.revenue.toFixed(2)}</p>
+          <p style={{ fontWeight: 700, fontSize: '1.3rem' }}>Revenue: ₹{selectedSummary.revenue.toFixed(0)}</p>
           <div className="grid grid-4" style={{ marginBottom: 20 }}>
             {selectedSummary.seatCounts.map((sc, i) => (
               <div className={`feature-card fc-${(i % 4) + 1}`} key={sc.status}>
@@ -143,23 +171,27 @@ export default function OrganiserDashboard() {
               </div>
             ))}
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(98,61,112,0.15)' }}>
-                <th style={{ padding: 8 }}>Ref</th><th style={{ padding: 8 }}>Customer</th><th style={{ padding: 8 }}>Status</th><th style={{ padding: 8 }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedSummary.bookings.map((b) => (
-                <tr key={b.id} style={{ borderBottom: '1px solid rgba(98,61,112,0.08)' }}>
-                  <td style={{ padding: 8 }}>{b.booking_ref}</td>
-                  <td style={{ padding: 8 }}>{b.customer_name}</td>
-                  <td style={{ padding: 8 }}>{b.status}</td>
-                  <td style={{ padding: 8 }}>${b.total_amount.toFixed(2)}</td>
+          {selectedSummary.bookings.length === 0 ? (
+            <p className="muted">No bookings yet for this event.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: 8 }}>Ref</th><th style={{ padding: 8 }}>Customer</th><th style={{ padding: 8 }}>Status</th><th style={{ padding: 8 }}>Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {selectedSummary.bookings.map((b) => (
+                  <tr key={b.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: 8 }}>{b.booking_ref}</td>
+                    <td style={{ padding: 8 }}>{b.customer_name}</td>
+                    <td style={{ padding: 8 }}>{b.status}</td>
+                    <td style={{ padding: 8 }}>₹{b.total_amount.toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>

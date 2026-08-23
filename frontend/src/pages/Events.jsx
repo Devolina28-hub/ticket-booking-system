@@ -99,7 +99,7 @@ export default function Events() {
                     <h3>{ev.title}</h3>
                     <p>{ev.venue_name} · {ev.event_date} · {ev.event_time}</p>
                     <div className="row-between" style={{ marginTop: 10 }}>
-                      {minPrice !== null && <div className="event-price">From ${minPrice.toFixed(0)}</div>}
+                      {minPrice !== null && <div className="event-price">From ₹{minPrice.toFixed(0)}</div>}
                       {soldOut ? (
                         <span className="pill-badge danger">Sold out</span>
                       ) : (

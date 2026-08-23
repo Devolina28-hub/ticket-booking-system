@@ -3,10 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, getUser } from '../api.js';
 import SeatGrid from '../components/SeatGrid.jsx';
 
+const MAX_SEATS = 4;
+const BOOKING_FEE = 49;
+
 export default function EventSeatMap() {
   const { id } = useParams();
   const navigate = useNavigate();
   const user = getUser();
+  const isPreviewOnly = user && user.role !== 'customer'; // organiser/admin can look, not book
 
   const [event, setEvent] = useState(null);
   const [pricing, setPricing] = useState([]);
@@ -60,7 +64,10 @@ export default function EventSeatMap() {
 
   async function toggleSeat(seat) {
     if (!user) { navigate('/login'); return; }
-    if (user.role !== 'customer') { setError('Only customer accounts can book seats.'); return; }
+    if (isPreviewOnly) {
+      setError(`${user.role === 'admin' ? 'Admin' : 'Organiser'} accounts can preview shows but cannot book tickets. Log in as a customer to book.`);
+      return;
+    }
     setError('');
 
     if (selected.some((s) => s.id === seat.id)) {
@@ -72,6 +79,11 @@ export default function EventSeatMap() {
     }
 
     if (seat.status !== 'available') return;
+
+    if (selected.length >= MAX_SEATS) {
+      setError(`You can select up to ${MAX_SEATS} seats at a time.`);
+      return;
+    }
 
     const newSelection = [...selected, seat];
     setBusy(true);
@@ -109,6 +121,10 @@ export default function EventSeatMap() {
 
   async function joinWaitlist(category) {
     if (!user) { navigate('/login'); return; }
+    if (isPreviewOnly) {
+      setError(`${user.role === 'admin' ? 'Admin' : 'Organiser'} accounts cannot join waitlists. Log in as a customer.`);
+      return;
+    }
     try {
       const data = await api.joinWaitlist({ event_id: Number(id), category });
       setError('');
@@ -121,7 +137,7 @@ export default function EventSeatMap() {
   if (!event) return <div className="center-text"><div className="spinner" style={{ margin: '60px auto' }} /></div>;
 
   const total = selected.reduce((sum, s) => sum + priceFor(s.category), 0);
-  const fee = selected.length ? 2 : 0;
+  const fee = selected.length ? BOOKING_FEE : 0;
   const grandTotal = total + fee;
 
   const categoryAvailability = {};
@@ -143,9 +159,9 @@ export default function EventSeatMap() {
             <p>
               Date · {event.event_date}<br />
               Time · {event.event_time}<br />
-              Amount paid · ${confirmedBooking.total_amount.toFixed(2)}
+              Amount paid · ₹{confirmedBooking.total_amount.toFixed(0)}
             </p>
-            <p className="muted">A confirmation email with this QR code has also been sent to you.</p>
+            <p className="muted">A confirmation email with this QR code has also been sent to you. Scanning the QR opens a live ticket-status page.</p>
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
               <button className="btn btn-secondary" onClick={() => navigate('/my-bookings')}>View my tickets</button>
               <button className="btn btn-dark" onClick={() => navigate('/')}>Browse more</button>
@@ -167,14 +183,20 @@ export default function EventSeatMap() {
         <button className="btn-link" onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, padding: 0 }}>← Back to events</button>
       </div>
 
+      {isPreviewOnly && (
+        <div className="alert" style={{ background: 'var(--amber-soft, #fff3de)', color: 'var(--amber, #c27a18)' }}>
+          You're viewing this as {user.role === 'admin' ? 'an admin' : 'an organiser'} — you can preview the show and seat map, but booking is only available to customer accounts.
+        </div>
+      )}
+
       <div className="event-header" style={{ display: 'grid', gridTemplateColumns: '230px 1fr', gap: 28, marginBottom: 32 }}>
         <div style={{
           height: 260, borderRadius: 16, padding: 20, color: '#fff', display: 'flex', alignItems: 'end',
           background: 'linear-gradient(145deg, #221f4b, #5b5cf0)',
         }}>
           <div>
-            <small style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.15em' }}>{event.venue_name?.toUpperCase()}</small>
-            <div style={{ font: '500 22px var(--font-display)', marginTop: 6 }}>{event.title}</div>
+            <small style={{ fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', opacity: 0.85 }}>{event.venue_name?.toUpperCase()}</small>
+            <div style={{ font: '700 22px var(--font-display)', marginTop: 6 }}>{event.title}</div>
           </div>
         </div>
         <div>
@@ -196,7 +218,7 @@ export default function EventSeatMap() {
             <div className={`feature-card fc-${(i % 4) + 1}`} key={p.category}>
               <div>
                 <h4>{p.category}</h4>
-                <p>${p.price.toFixed(2)} per seat</p>
+                <p>₹{p.price.toFixed(0)} per seat</p>
               </div>
               {avail.available === 0 ? (
                 <button className="btn btn-secondary btn-sm" style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }} onClick={() => joinWaitlist(p.category)}>Join waitlist</button>
@@ -215,14 +237,17 @@ export default function EventSeatMap() {
           <div className="panel">
             <div className="row-between" style={{ marginBottom: 10 }}>
               <h2>Select your seats</h2>
-              {remainingSec !== null && (
-                <span className="pill-badge accent">Held for {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}</span>
-              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <span className="pill-badge">Max {MAX_SEATS} seats</span>
+                {remainingSec !== null && (
+                  <span className="pill-badge accent">Held for {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}</span>
+                )}
+              </div>
             </div>
-            <SeatGrid seats={seats} selectedIds={selected.map((s) => s.id)} onToggle={toggleSeat} />
+            <SeatGrid seats={seats} selectedIds={selected.map((s) => s.id)} onToggle={toggleSeat} disabled={isPreviewOnly} />
           </div>
 
-          {soldOutCategory && (
+          {soldOutCategory && !isPreviewOnly && (
             <div className="waitlist-card">
               <h3>Can't find a seat?</h3>
               <p>Join the waitlist for <strong>{soldOutCategory[0]}</strong> seats. If a booking is cancelled, the next person in line gets a time-limited offer by email.</p>
@@ -244,12 +269,12 @@ export default function EventSeatMap() {
               <div className="timerbar"><i style={{ width: `${(remainingSec / 600) * 100}%` }} /></div>
             </div>
           )}
-          <div className="price-row"><span>Seats</span><span>${total.toFixed(2)}</span></div>
-          <div className="price-row"><span>Booking fee</span><span>${fee.toFixed(2)}</span></div>
+          <div className="price-row"><span>Seats ({selected.length}/{MAX_SEATS})</span><span>₹{total.toFixed(0)}</span></div>
+          <div className="price-row"><span>Booking fee</span><span>₹{fee.toFixed(0)}</span></div>
           <div className="dark-line" />
-          <div className="price-row total"><span>Total</span><span>${grandTotal.toFixed(2)}</span></div>
-          <button className="btn btn-primary btn-block" disabled={busy || selected.length === 0} onClick={checkout}>
-            {busy ? 'Booking…' : 'Continue to payment →'}
+          <div className="price-row total"><span>Total</span><span>₹{grandTotal.toFixed(0)}</span></div>
+          <button className="btn btn-primary btn-block" disabled={busy || selected.length === 0 || isPreviewOnly} onClick={checkout}>
+            {isPreviewOnly ? 'Booking disabled for this role' : busy ? 'Booking…' : 'Continue to payment →'}
           </button>
         </aside>
       </div>

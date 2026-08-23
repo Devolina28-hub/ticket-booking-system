@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
+const { ensureSchema } = require('./db');
 const authRoutes = require('./routes/auth');
 const venueRoutes = require('./routes/venues');
 const eventRoutes = require('./routes/events');
@@ -31,7 +32,18 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Ticket Booking API listening on http://localhost:${PORT}`);
-  startHoldSweeper();
-});
+
+// Schema must be ready before we start accepting requests, since every route
+// queries the database immediately.
+ensureSchema()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Ticket Booking API listening on http://localhost:${PORT}`);
+      startHoldSweeper();
+    });
+  })
+  .catch((err) => {
+    console.error('[server] Failed to initialize database schema:', err.message);
+    process.exit(1);
+  });
+

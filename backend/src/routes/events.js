@@ -1,67 +1,74 @@
 const express = require('express');
-const db = require('../db');
+const { query, queryOne, withTransaction } = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
 
 const router = express.Router();
 
 // Browse + filter events (public). Query params: type, date, q (title search)
-router.get('/', (req, res) => {
-  const { type, date, q } = req.query;
-  let sql = `SELECT e.*, v.name as venue_name, v.address as venue_address
-             FROM events e JOIN venues v ON v.id = e.venue_id WHERE 1=1`;
-  const params = [];
-  if (type) {
-    sql += ' AND e.type = ?';
-    params.push(type);
-  }
-  if (date) {
-    sql += ' AND e.event_date = ?';
-    params.push(date);
-  }
-  if (q) {
-    sql += ' AND e.title LIKE ?';
-    params.push(`%${q}%`);
-  }
-  sql += ' ORDER BY e.event_date, e.event_time';
-  const events = db.prepare(sql).all(...params);
+router.get('/', async (req, res) => {
+  try {
+    const { type, date, q } = req.query;
+    let sql = `SELECT e.*, v.name as venue_name, v.address as venue_address
+               FROM events e JOIN venues v ON v.id = e.venue_id WHERE 1=1`;
+    const params = [];
+    if (type) {
+      params.push(type);
+      sql += ` AND e.type = $${params.length}`;
+    }
+    if (date) {
+      params.push(date);
+      sql += ` AND e.event_date = $${params.length}`;
+    }
+    if (q) {
+      params.push(`%${q}%`);
+      sql += ` AND e.title ILIKE $${params.length}`;
+    }
+    sql += ' ORDER BY e.event_date, e.event_time';
+    const events = await query(sql, params);
 
-  // attach pricing + seat availability summary
-  const withMeta = events.map((ev) => {
-    const pricing = db.prepare('SELECT category, price FROM event_pricing WHERE event_id = ?').all(ev.id);
-    const counts = db
-      .prepare(
-        `SELECT category,
-                SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available,
-                COUNT(*) as total
-         FROM event_seats WHERE event_id = ? GROUP BY category`
-      )
-      .all(ev.id);
-    return { ...ev, pricing, availability: counts };
-  });
+    // attach pricing + seat availability summary
+    const withMeta = await Promise.all(
+      events.map(async (ev) => {
+        const pricing = await query('SELECT category, price FROM event_pricing WHERE event_id = $1', [ev.id]);
+        const counts = await query(
+          `SELECT category,
+                  SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END)::int as available,
+                  COUNT(*)::int as total
+           FROM event_seats WHERE event_id = $1 GROUP BY category`,
+          [ev.id]
+        );
+        return { ...ev, pricing, availability: counts };
+      })
+    );
 
-  res.json({ events: withMeta });
+    res.json({ events: withMeta });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.get('/:id', (req, res) => {
-  releaseExpiredHoldsNow(); // ensure seat map is fresh before client renders it
-  const event = db
-    .prepare(
+router.get('/:id', async (req, res) => {
+  try {
+    await releaseExpiredHoldsNow(); // ensure seat map is fresh before client renders it
+    const event = await queryOne(
       `SELECT e.*, v.name as venue_name, v.address as venue_address
-       FROM events e JOIN venues v ON v.id = e.venue_id WHERE e.id = ?`
-    )
-    .get(req.params.id);
-  if (!event) return res.status(404).json({ error: 'Event not found' });
+       FROM events e JOIN venues v ON v.id = e.venue_id WHERE e.id = $1`,
+      [req.params.id]
+    );
+    if (!event) return res.status(404).json({ error: 'Event not found' });
 
-  const pricing = db.prepare('SELECT category, price FROM event_pricing WHERE event_id = ?').all(event.id);
-  const seats = db
-    .prepare(
+    const pricing = await query('SELECT category, price FROM event_pricing WHERE event_id = $1', [event.id]);
+    const seats = await query(
       `SELECT id, row_label, seat_number, category, status, hold_expires_at
-       FROM event_seats WHERE event_id = ? ORDER BY row_label, seat_number`
-    )
-    .all(event.id);
+       FROM event_seats WHERE event_id = $1 ORDER BY row_label, seat_number`,
+      [event.id]
+    );
 
-  res.json({ event, pricing, seats });
+    res.json({ event, pricing, seats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**
@@ -71,71 +78,80 @@ router.get('/:id', (req, res) => {
  * This snapshots the venue's seat layout into event_seats (status=available),
  * so each show has its own independent seat map even if the venue is reused.
  */
-router.post('/', requireAuth, requireRole('organiser', 'admin'), (req, res) => {
-  const { title, description, type, venue_id, event_date, event_time, pricing } = req.body;
-  if (!title || !venue_id || !event_date || !event_time || !Array.isArray(pricing)) {
-    return res.status(400).json({ error: 'title, venue_id, event_date, event_time, pricing[] are required' });
-  }
+router.post('/', requireAuth, requireRole('organiser', 'admin'), async (req, res) => {
+  try {
+    const { title, description, type, venue_id, event_date, event_time, pricing } = req.body;
+    if (!title || !venue_id || !event_date || !event_time || !Array.isArray(pricing)) {
+      return res.status(400).json({ error: 'title, venue_id, event_date, event_time, pricing[] are required' });
+    }
 
-  const venue = db.prepare('SELECT * FROM venues WHERE id = ?').get(venue_id);
-  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+    const venue = await queryOne('SELECT * FROM venues WHERE id = $1', [venue_id]);
+    if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
-  const venueSeats = db.prepare('SELECT * FROM venue_seats WHERE venue_id = ?').all(venue_id);
-  if (venueSeats.length === 0) return res.status(400).json({ error: 'Venue has no seat layout' });
+    const venueSeats = await query('SELECT * FROM venue_seats WHERE venue_id = $1', [venue_id]);
+    if (venueSeats.length === 0) return res.status(400).json({ error: 'Venue has no seat layout' });
 
-  const trx = db.transaction(() => {
-    const eventInfo = db
-      .prepare(
+    const eventId = await withTransaction(async (trx) => {
+      const eventRow = await trx.queryOne(
         `INSERT INTO events (title, description, type, venue_id, organiser_id, event_date, event_time)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(title, description || null, type || 'event', venue_id, req.user.id, event_date, event_time);
-    const eventId = eventInfo.lastInsertRowid;
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [title, description || null, type || 'event', venue_id, req.user.id, event_date, event_time]
+      );
 
-    const insertPricing = db.prepare('INSERT INTO event_pricing (event_id, category, price) VALUES (?, ?, ?)');
-    for (const p of pricing) insertPricing.run(eventId, p.category, p.price);
+      for (const p of pricing) {
+        await trx.query('INSERT INTO event_pricing (event_id, category, price) VALUES ($1, $2, $3)', [
+          eventRow.id, p.category, p.price,
+        ]);
+      }
 
-    const insertSeat = db.prepare(
-      `INSERT INTO event_seats (event_id, venue_seat_id, row_label, seat_number, category, status)
-       VALUES (?, ?, ?, ?, ?, 'available')`
-    );
-    for (const vs of venueSeats) insertSeat.run(eventId, vs.id, vs.row_label, vs.seat_number, vs.category);
+      for (const vs of venueSeats) {
+        await trx.query(
+          `INSERT INTO event_seats (event_id, venue_seat_id, row_label, seat_number, category, status)
+           VALUES ($1, $2, $3, $4, $5, 'available')`,
+          [eventRow.id, vs.id, vs.row_label, vs.seat_number, vs.category]
+        );
+      }
 
-    return eventId;
-  });
+      return eventRow.id;
+    });
 
-  const eventId = trx();
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
-  res.status(201).json({ event });
+    const event = await queryOne('SELECT * FROM events WHERE id = $1', [eventId]);
+    res.status(201).json({ event });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Organiser: booking summary + revenue for one of their events
-router.get('/:id/summary', requireAuth, requireRole('organiser', 'admin'), (req, res) => {
-  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
-  if (!event) return res.status(404).json({ error: 'Event not found' });
-  if (req.user.role !== 'admin' && event.organiser_id !== req.user.id) {
-    return res.status(403).json({ error: 'Not your event' });
-  }
+router.get('/:id/summary', requireAuth, requireRole('organiser', 'admin'), async (req, res) => {
+  try {
+    const event = await queryOne('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+    if (req.user.role !== 'admin' && event.organiser_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not your event' });
+    }
 
-  const bookings = db
-    .prepare(
+    const bookings = await query(
       `SELECT b.id, b.booking_ref, b.status, b.total_amount, b.created_at, u.name as customer_name, u.email as customer_email
        FROM bookings b JOIN users u ON u.id = b.customer_id
-       WHERE b.event_id = ? ORDER BY b.created_at DESC`
-    )
-    .all(event.id);
+       WHERE b.event_id = $1 ORDER BY b.created_at DESC`,
+      [event.id]
+    );
 
-  const revenue = db
-    .prepare(`SELECT COALESCE(SUM(total_amount),0) as total FROM bookings WHERE event_id = ? AND status = 'confirmed'`)
-    .get(event.id).total;
+    const revenueRow = await queryOne(
+      `SELECT COALESCE(SUM(total_amount),0) as total FROM bookings WHERE event_id = $1 AND status = 'confirmed'`,
+      [event.id]
+    );
 
-  const seatCounts = db
-    .prepare(
-      `SELECT status, COUNT(*) as count FROM event_seats WHERE event_id = ? GROUP BY status`
-    )
-    .all(event.id);
+    const seatCounts = await query(
+      `SELECT status, COUNT(*)::int as count FROM event_seats WHERE event_id = $1 GROUP BY status`,
+      [event.id]
+    );
 
-  res.json({ event, bookings, revenue, seatCounts });
+    res.json({ event, bookings, revenue: Number(revenueRow.total), seatCounts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

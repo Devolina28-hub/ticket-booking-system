@@ -194,7 +194,7 @@ p { line-height: 1.65; color: var(--muted); }
 .seat-row-label { width: 22px; font-weight: 700; color: var(--muted); text-align: center; font-size: 13px; }
 .seat { width: 32px; height: 31px; border-radius: 9px 9px 4px 4px; display: flex; align-items: center; justify-content: center; font: 700 10px var(--font-body); cursor: pointer; border: none; transition: transform 120ms ease; }
 .seat:hover:not(:disabled) { transform: translateY(-2px); }
-.seat[data-status="available"] { background: var(--grad-soft); color: var(--indigo-dark); }
+.seat[data-status="available"] { background: var(--green-soft); color: var(--green); }
 .seat[data-status="selected"] { background: var(--grad-primary); color: #fff; box-shadow: 0 0 0 2px var(--cyan); }
 .seat[data-status="held"], .seat[data-status="offered"] { background: var(--amber-soft); color: var(--amber); cursor: not-allowed; }
 .seat[data-status="booked"] { background: var(--red-soft); color: var(--red); cursor: not-allowed; opacity: 0.8; }
