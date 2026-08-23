@@ -105,7 +105,7 @@ async function sendBookingConfirmation({ to, customerName, event, seats, booking
       <p><strong>Booking Reference:</strong> ${bookingRef}<br/>
       <strong>Seats:</strong> ${seatList}<br/>
       <strong>Total Paid:</strong> ₹${totalAmount.toFixed(0)}</p>
-      <p>Show this QR code at entry — scanning it shows your seat details:</p>
+      <p>Show this QR code at entry — scanning it opens your digital ticket with full seat details:</p>
       <img src="${qrDataUrl}" alt="QR Code" style="width:200px;height:200px;" />
     </div>
   `;
