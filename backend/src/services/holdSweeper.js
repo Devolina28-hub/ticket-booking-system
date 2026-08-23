@@ -15,9 +15,19 @@ async function releaseExpiredHoldsNow() {
   const now = new Date().toISOString();
 
   // 1. Plain abandoned holds -> back to available, seat map updates immediately.
+  //    This also covers seats held for an in-progress QR payment, since
+  //    /payments/initiate re-extends hold_expires_at to match the payment
+  //    session's own 10-minute expiry.
   await query(
     `UPDATE event_seats SET status = 'available', held_by = NULL, hold_expires_at = NULL
      WHERE status = 'held' AND hold_expires_at IS NOT NULL AND hold_expires_at < $1`,
+    [now]
+  );
+
+  // 1b. Mark any pending payment sessions whose scan-to-pay window has
+  // passed as 'expired' (their seats are already freed above).
+  await query(
+    `UPDATE payment_sessions SET status = 'expired' WHERE status = 'pending' AND expires_at < $1`,
     [now]
   );
 

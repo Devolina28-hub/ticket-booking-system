@@ -48,6 +48,11 @@ export const api = {
   myBookings: () => request('/bookings/my'),
   cancelBooking: (id) => request(`/bookings/${id}/cancel`, { method: 'POST' }),
 
+  initiatePayment: (payload) => request('/payments/initiate', { method: 'POST', body: payload }),
+  paymentStatus: (paymentRef) => request(`/payments/${paymentRef}/status`, { auth: false }),
+  paymentDecision: (paymentRef, approve) =>
+    request(`/payments/${paymentRef}/decision`, { method: 'POST', body: { approve }, auth: false }),
+
   joinWaitlist: (payload) => request('/waitlist', { method: 'POST', body: payload }),
   myWaitlist: () => request('/waitlist/my'),
   completeWaitlistOffer: (id) => request(`/waitlist/${id}/complete`, { method: 'POST' }),

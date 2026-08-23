@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.jsx';
 import Events from './pages/Events.jsx';
 import EventSeatMap from './pages/EventSeatMap.jsx';
 import TicketVerify from './pages/TicketVerify.jsx';
+import PayConfirm from './pages/PayConfirm.jsx';
 import RoleSelect from './pages/RoleSelect.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
@@ -28,6 +29,11 @@ export default function App() {
           no site navigation/branding shell, so it reads as "here's your
           ticket" rather than the app loading. */}
       <Route path="/ticket/:bookingRef" element={<TicketVerify />} />
+
+      {/* Scanned from the "Scan to Pay" QR shown mid-checkout -- also a
+          standalone page with no site shell, so it reads like a payment
+          app's confirmation screen. */}
+      <Route path="/pay/:paymentRef" element={<PayConfirm />} />
 
       <Route
         path="*"

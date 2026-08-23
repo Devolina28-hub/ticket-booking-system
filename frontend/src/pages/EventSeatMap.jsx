@@ -21,7 +21,10 @@ export default function EventSeatMap() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  const [payment, setPayment] = useState(null); // { payment_ref, qr_data_url, amount, expires_at }
+  const [paymentStatus, setPaymentStatus] = useState(null); // 'pending' | 'declined' | 'expired'
   const pollRef = useRef(null);
+  const paymentPollRef = useRef(null);
 
   const loadEvent = useCallback(async () => {
     const data = await api.getEvent(id);
@@ -102,21 +105,74 @@ export default function EventSeatMap() {
     }
   }
 
+  // Step 1: "Continue to payment" no longer books directly -- it opens a
+  // scan-to-pay QR. The actual booking only happens once someone (on
+  // whatever device scans it) taps Yes on the /pay/:paymentRef page.
   async function checkout() {
     setBusy(true);
     setError('');
     try {
-      const data = await api.confirmBooking({ event_id: Number(id), seat_ids: selected.map((s) => s.id) });
-      setConfirmedBooking(data.booking);
-      setSelected([]);
-      setHoldExpiresAt(null);
-      const seatsData = await api.getSeats(id);
-      setSeats(seatsData.seats);
+      const data = await api.initiatePayment({ event_id: Number(id), seat_ids: selected.map((s) => s.id) });
+      setPayment(data);
+      setPaymentStatus('pending');
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy(false);
     }
+  }
+
+  // Poll the payment session while the QR screen is up. Reacts to whatever
+  // decision gets made on the /pay/:paymentRef page (or a timeout).
+  useEffect(() => {
+    if (!payment || paymentStatus !== 'pending') {
+      if (paymentPollRef.current) clearInterval(paymentPollRef.current);
+      return;
+    }
+    paymentPollRef.current = setInterval(async () => {
+      try {
+        const data = await api.paymentStatus(payment.payment_ref);
+        if (data.status === 'approved') {
+          setConfirmedBooking(data.booking);
+          setSelected([]);
+          setHoldExpiresAt(null);
+          setPayment(null);
+          setPaymentStatus(null);
+          const seatsData = await api.getSeats(id);
+          setSeats(seatsData.seats);
+        } else if (data.status !== 'pending') {
+          setPaymentStatus(data.status); // 'declined' | 'expired'
+        }
+      } catch { /* ignore transient errors, keep polling */ }
+    }, 3000);
+    return () => clearInterval(paymentPollRef.current);
+  }, [payment, paymentStatus, id]);
+
+  // Countdown for the QR screen, mirroring the seat-hold timer above.
+  const [paymentRemainingSec, setPaymentRemainingSec] = useState(null);
+  useEffect(() => {
+    if (!payment || paymentStatus !== 'pending') { setPaymentRemainingSec(null); return; }
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((new Date(payment.expires_at) - new Date()) / 1000));
+      setPaymentRemainingSec(diff);
+      if (diff === 0) setPaymentStatus('expired');
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [payment, paymentStatus]);
+
+  async function cancelPayment() {
+    if (!payment) return;
+    try { await api.paymentDecision(payment.payment_ref, false); } catch { /* best-effort */ }
+    setPaymentStatus('declined');
+  }
+
+  function backToSeats() {
+    setPayment(null);
+    setPaymentStatus(null);
+    setSelected([]);
+    setHoldExpiresAt(null);
   }
 
   async function joinWaitlist(category) {
@@ -147,6 +203,47 @@ export default function EventSeatMap() {
     if (s.status === 'available') categoryAvailability[s.category].available++;
   }
   const soldOutCategory = Object.entries(categoryAvailability).find(([, v]) => v.available === 0);
+
+  if (payment && paymentStatus === 'pending') {
+    return (
+      <div style={{ maxWidth: 480, margin: '40px auto' }}>
+        <p className="status-live">● AWAITING PAYMENT</p>
+        <div className="panel center-text">
+          <h2 style={{ marginBottom: 4 }}>Scan to pay</h2>
+          <p className="muted" style={{ marginBottom: 20 }}>
+            Scan this QR with another device to confirm payment of <strong>₹{Number(payment.amount).toFixed(0)}</strong>.
+          </p>
+          <div className="qr-panel" style={{ borderRadius: 14, marginBottom: 16 }}>
+            <img src={payment.qr_data_url} alt="Scan to pay QR" style={{ width: 220, borderRadius: 8 }} />
+          </div>
+          {paymentRemainingSec !== null && (
+            <div className="timer-box" style={{ color: 'var(--muted)' }}>
+              EXPIRES IN <strong>{Math.floor(paymentRemainingSec / 60)}:{String(paymentRemainingSec % 60).padStart(2, '0')}</strong>
+              <div className="timerbar"><i style={{ width: `${(paymentRemainingSec / 600) * 100}%`, background: 'var(--indigo)' }} /></div>
+            </div>
+          )}
+          <p className="muted" style={{ marginBottom: 16 }}>Waiting for confirmation…</p>
+          <button className="btn btn-secondary" onClick={cancelPayment}>Cancel payment</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (paymentStatus === 'declined' || paymentStatus === 'expired') {
+    const isDeclined = paymentStatus === 'declined';
+    return (
+      <div style={{ maxWidth: 480, margin: '40px auto' }}>
+        <div className="panel center-text">
+          <div style={{ fontSize: 44, marginBottom: 8 }}>{isDeclined ? '⛔' : '⏰'}</div>
+          <h2 style={{ color: isDeclined ? 'var(--red)' : 'var(--amber)', marginBottom: 4 }}>
+            {isDeclined ? 'Payment failed' : 'Payment window expired'}
+          </h2>
+          <p className="muted" style={{ marginBottom: 20 }}>No booking was made and your seats have been released.</p>
+          <button className="btn btn-primary" onClick={backToSeats}>Back to seat selection</button>
+        </div>
+      </div>
+    );
+  }
 
   if (confirmedBooking) {
     return (

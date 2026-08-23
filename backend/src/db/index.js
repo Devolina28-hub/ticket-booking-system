@@ -155,6 +155,28 @@ CREATE TABLE IF NOT EXISTS booking_seats (
   event_seat_id INTEGER NOT NULL REFERENCES event_seats(id)
 );
 
+-- Mock "scan-to-pay" sessions. Created when a customer clicks "Continue to
+-- payment": a QR is generated pointing at the public /pay/:paymentRef page.
+-- Whoever scans it (in this demo, just opening that URL) taps Yes/No there,
+-- which is what actually finalizes (or cancels) the booking -- this browser
+-- tab just polls /status until the decision lands.
+CREATE TABLE IF NOT EXISTS payment_sessions (
+  id SERIAL PRIMARY KEY,
+  payment_ref TEXT NOT NULL UNIQUE,
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  customer_id INTEGER NOT NULL REFERENCES users(id),
+  seat_ids INTEGER[] NOT NULL,
+  amount REAL NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending','approved','declined','expired')) DEFAULT 'pending',
+  qr_data_url TEXT,
+  booking_id INTEGER REFERENCES bookings(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  decided_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_sessions_ref ON payment_sessions(payment_ref);
+
 -- Waitlist queue, FIFO per (event, category)
 CREATE TABLE IF NOT EXISTS waitlist (
   id SERIAL PRIMARY KEY,

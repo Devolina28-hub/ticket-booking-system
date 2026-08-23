@@ -8,6 +8,7 @@ const venueRoutes = require('./routes/venues');
 const eventRoutes = require('./routes/events');
 const seatRoutes = require('./routes/seats');
 const bookingRoutes = require('./routes/bookings');
+const paymentRoutes = require('./routes/payments');
 const waitlistRoutes = require('./routes/waitlist');
 const { startHoldSweeper } = require('./services/holdSweeper');
 const { verifyEmailConfig } = require('./services/email');
@@ -23,6 +24,7 @@ app.use('/api/venues', venueRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/events/:eventId/seats', seatRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
