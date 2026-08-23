@@ -109,7 +109,7 @@ router.post('/confirm', requireAuth, requireRole('customer'), async (req, res) =
 
     const customer = await queryOne('SELECT * FROM users WHERE id = $1', [req.user.id]);
 
-    const qrDataUrl = await generateQrDataUrl({ bookingRef, customerName: customer.name, event, seats });
+    const qrDataUrl = await generateQrDataUrl(bookingRef);
     await query('UPDATE bookings SET qr_data_url = $1 WHERE id = $2', [qrDataUrl, bookingId]);
 
     console.log(`[bookings] booking ${bookingRef} confirmed -- attempting confirmation email to ${customer.email}`);
