@@ -9,7 +9,7 @@ function generateBookingRef() {
 // scanning it with a phone camera opens a page showing live booking status
 // (valid / cancelled / not found) instead of raw, unreadable JSON text.
 async function generateQrDataUrl(bookingRef) {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = process.env.FRONTEND_URL || 'ticket-booking-system-delta-six.vercel.app';
   const verifyUrl = `${frontendUrl.replace(/\/$/, '')}/ticket/${bookingRef}`;
   return QRCode.toDataURL(verifyUrl, { errorCorrectionLevel: 'M', margin: 1, width: 300 });
 }

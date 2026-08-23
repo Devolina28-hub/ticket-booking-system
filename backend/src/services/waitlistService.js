@@ -2,7 +2,7 @@ const { withTransaction } = require('../db');
 const { sendWaitlistOffer } = require('./email');
 
 const OFFER_TTL_MIN = Number(process.env.WAITLIST_OFFER_TTL_MINUTES || 15);
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'ticket-booking-system-delta-six.vercel.app';
 
 /**
  * Called whenever a seat becomes available again for an event+category

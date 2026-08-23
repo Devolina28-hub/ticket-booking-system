@@ -1,5 +1,6 @@
 const BASE = 'https://ticket-booking-system-taz8.onrender.com/api';
 
+
 function getToken() {
   return localStorage.getItem('token');
 }
