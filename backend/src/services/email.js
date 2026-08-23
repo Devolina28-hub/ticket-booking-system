@@ -1,95 +1,102 @@
-const nodemailer = require('nodemailer');
+// Sends email via Brevo's HTTP API (https://api.brevo.com/v3/smtp/email)
+// instead of SMTP. Render's free tier blocks all outbound traffic on SMTP
+// ports (25, 465, 465, 587) as of Sept 2025, so nodemailer/SMTP simply
+// cannot work here -- the connection hangs until it times out. The HTTP
+// API sends over normal HTTPS (port 443), which is not blocked, and uses
+// the same Brevo account.
 
-let transporterPromise = null;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const BREVO_ACCOUNT_URL = 'https://api.brevo.com/v3/account';
 
 function env(key) {
   const v = process.env[key];
   return v ? v.trim() : v;
 }
 
-// Lazily creates a transporter. If SMTP_HOST is not configured, we create a
-// free Ethereal test account on the fly (no signup needed) and log a preview
-// URL to the console instead of actually delivering to a real inbox. If a
-// real SMTP_HOST (e.g. Brevo) IS configured, we verify() the connection
-// immediately and log a clear pass/fail message -- this is the single most
-// useful diagnostic for "emails aren't sending", since createTransport()
-// alone never throws even with wrong credentials; only verify()/sendMail()
-// actually talk to the server and reveal auth problems.
-async function getTransporter() {
-  if (transporterPromise) return transporterPromise;
+function apiKey() {
+  return env('BREVO_API_KEY');
+}
 
-  transporterPromise = (async () => {
-    const host = env('SMTP_HOST');
-    if (host) {
-      const transporter = nodemailer.createTransport({
-        host,
-        port: Number(env('SMTP_PORT') || 587),
-        secure: Number(env('SMTP_PORT')) === 465,
-        auth: env('SMTP_USER') ? { user: env('SMTP_USER'), pass: env('SMTP_PASS') } : undefined,
-        // Without these, a blocked/silently-dropped outbound connection can
-        // hang for minutes before nodemailer's own defaults give up, making
-        // it look like nothing happened at all. Fail fast and log instead.
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
-      });
-      try {
-        await transporter.verify();
-        console.log(`[email] SMTP connection OK (${host}) -- real emails will be sent.`);
-      } catch (err) {
-        console.error(
-          `[email] SMTP verification FAILED for ${host}. Emails will NOT be delivered until this is fixed.\n` +
-          `  Reason: ${err.message}\n` +
-          `  Common causes: (1) SMTP_USER/SMTP_PASS wrong or has extra spaces, ` +
-          `(2) the SMTP_FROM address is not a VERIFIED sender in your Brevo account ` +
-          `(Brevo -> Senders, Domains & Dedicated IPs -> Senders), ` +
-          `(3) SMTP_PORT/host mismatch.`
-        );
-      }
-      return transporter;
+// "Encore Tickets <no-reply@ticketbooking.local>" -> { name, email }
+function parseSender() {
+  const raw = env('SMTP_FROM') || '"Encore Tickets" <no-reply@ticketbooking.local>';
+  const match = raw.match(/^"?([^"<]*)"?\s*<([^>]+)>\s*$/);
+  if (match) {
+    return { name: match[1].trim() || undefined, email: match[2].trim() };
+  }
+  return { email: raw };
+}
+
+// Runs once at server startup (see server.js) so you get a clear pass/fail
+// log line right away instead of waiting for the first real booking.
+async function verifyEmailConfig() {
+  const key = apiKey();
+  if (!key) {
+    console.error(
+      '[email] BREVO_API_KEY is not set -- emails will NOT be sent.\n' +
+      '  Fix: in your Brevo account go to Settings -> SMTP & API -> API Keys tab, ' +
+      'create a key, and add it as BREVO_API_KEY in Render -> your service -> Environment.'
+    );
+    return;
+  }
+  try {
+    const res = await fetch(BREVO_ACCOUNT_URL, { headers: { 'api-key': key } });
+    if (res.ok) {
+      console.log('[email] Brevo API key OK -- real emails will be sent.');
+    } else {
+      const text = await res.text().catch(() => '');
+      console.error(`[email] Brevo API key check FAILED (status ${res.status}): ${text}`);
     }
-    const testAccount = await nodemailer.createTestAccount();
-    console.log('[email] No SMTP_HOST configured -- using Ethereal test inbox (emails are NOT real, only previewable):', testAccount.user);
-    return nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    });
-  })();
-
-  return transporterPromise;
+  } catch (err) {
+    console.error('[email] Brevo API check errored:', err.message);
+  }
 }
 
 async function sendMail({ to, subject, html, attachments }) {
-  const transporter = await getTransporter();
-  try {
-    const info = await transporter.sendMail({
-      from: env('SMTP_FROM') || '"Encore Tickets" <no-reply@ticketbooking.local>',
-      to,
-      subject,
-      html,
-      attachments,
-    });
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    if (previewUrl) {
-      console.log(`[email] Ethereal preview (${subject} -> ${to}): ${previewUrl}`);
-    } else {
-      console.log(`[email] Sent "${subject}" to ${to} (messageId: ${info.messageId})`);
-    }
-    return { info, previewUrl };
-  } catch (err) {
-    console.error(
-      `[email] FAILED to send "${subject}" to ${to}.\n` +
-      `  Error: ${err.message}${err.response ? `\n  Server response: ${err.response}` : ''}`
-    );
+  const key = apiKey();
+  if (!key) {
+    const err = new Error('BREVO_API_KEY not configured');
+    console.error(`[email] FAILED to send "${subject}" to ${to}: ${err.message}`);
     throw err;
   }
+
+  const body = {
+    sender: parseSender(),
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+  };
+  if (attachments && attachments.length) {
+    // Brevo's API wants { name, content } where content is base64 (no data:
+    // URL prefix) and name must end in a real file extension.
+    body.attachment = attachments.map((a) => ({ name: a.filename, content: a.content }));
+  }
+
+  let res;
+  try {
+    res = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'api-key': key },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    console.error(`[email] FAILED to send "${subject}" to ${to}. Network error: ${err.message}`);
+    throw err;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error(`[email] FAILED to send "${subject}" to ${to}. Brevo status ${res.status}: ${text}`);
+    throw new Error(`Brevo API error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json().catch(() => ({}));
+  console.log(`[email] Sent "${subject}" to ${to} (messageId: ${data.messageId || 'n/a'})`);
+  return data;
 }
 
 async function sendBookingConfirmation({ to, customerName, event, seats, bookingRef, qrDataUrl, totalAmount }) {
   const seatList = seats.map((s) => `${s.row_label}${s.seat_number} (${s.category})`).join(', ');
-  const qrCid = 'qrcode';
   const html = `
     <div style="font-family: sans-serif; max-width:520px; margin:auto;">
       <h2 style="color:#4340C9;">Booking Confirmed 🎟️</h2>
@@ -98,8 +105,8 @@ async function sendBookingConfirmation({ to, customerName, event, seats, booking
       <p><strong>Booking Reference:</strong> ${bookingRef}<br/>
       <strong>Seats:</strong> ${seatList}<br/>
       <strong>Total Paid:</strong> ₹${totalAmount.toFixed(0)}</p>
-      <p>Show this QR code at entry — scanning it opens a live ticket-status page:</p>
-      <img src="cid:${qrCid}" alt="QR Code" style="width:200px;height:200px;" />
+      <p>Show this QR code at entry — scanning it shows your seat details:</p>
+      <img src="${qrDataUrl}" alt="QR Code" style="width:200px;height:200px;" />
     </div>
   `;
   return sendMail({
@@ -107,12 +114,7 @@ async function sendBookingConfirmation({ to, customerName, event, seats, booking
     subject: `Booking Confirmed: ${event.title} (${bookingRef})`,
     html,
     attachments: [
-      {
-        filename: 'ticket-qr.png',
-        content: qrDataUrl.split('base64,')[1],
-        encoding: 'base64',
-        cid: qrCid,
-      },
+      { filename: 'ticket-qr.png', content: qrDataUrl.split('base64,')[1] },
     ],
   });
 }
@@ -132,4 +134,4 @@ async function sendWaitlistOffer({ to, customerName, event, seat, offerUrl, expi
   return sendMail({ to, subject: `Seat available for ${event.title} — act fast!`, html });
 }
 
-module.exports = { sendMail, sendBookingConfirmation, sendWaitlistOffer, verifyEmailConfig: getTransporter };
+module.exports = { sendMail, sendBookingConfirmation, sendWaitlistOffer, verifyEmailConfig };
