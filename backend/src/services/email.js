@@ -26,6 +26,12 @@ async function getTransporter() {
         port: Number(env('SMTP_PORT') || 587),
         secure: Number(env('SMTP_PORT')) === 465,
         auth: env('SMTP_USER') ? { user: env('SMTP_USER'), pass: env('SMTP_PASS') } : undefined,
+        // Without these, a blocked/silently-dropped outbound connection can
+        // hang for minutes before nodemailer's own defaults give up, making
+        // it look like nothing happened at all. Fail fast and log instead.
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
       });
       try {
         await transporter.verify();
@@ -126,4 +132,4 @@ async function sendWaitlistOffer({ to, customerName, event, seat, offerUrl, expi
   return sendMail({ to, subject: `Seat available for ${event.title} — act fast!`, html });
 }
 
-module.exports = { sendMail, sendBookingConfirmation, sendWaitlistOffer };
+module.exports = { sendMail, sendBookingConfirmation, sendWaitlistOffer, verifyEmailConfig: getTransporter };

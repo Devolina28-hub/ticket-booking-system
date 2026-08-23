@@ -10,6 +10,7 @@ const seatRoutes = require('./routes/seats');
 const bookingRoutes = require('./routes/bookings');
 const waitlistRoutes = require('./routes/waitlist');
 const { startHoldSweeper } = require('./services/holdSweeper');
+const { verifyEmailConfig } = require('./services/email');
 
 const app = express();
 app.use(cors());
@@ -40,6 +41,9 @@ ensureSchema()
     app.listen(PORT, () => {
       console.log(`Ticket Booking API listening on http://localhost:${PORT}`);
       startHoldSweeper();
+      // Kick off the SMTP check now instead of waiting for the first real
+      // booking -- gives a clear pass/fail log line right at boot.
+      verifyEmailConfig().catch((err) => console.error('[email] Startup check errored:', err.message));
     });
   })
   .catch((err) => {

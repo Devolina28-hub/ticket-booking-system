@@ -23,35 +23,46 @@ export default function App() {
   const [user, setUser] = useState(getUser());
 
   return (
-    <div className="app-shell">
-      <Navbar user={user} setUser={setUser} />
-      <Routes>
-        <Route path="/" element={<Events />} />
-        <Route path="/events/:id" element={<EventSeatMap />} />
-        <Route path="/ticket/:bookingRef" element={<TicketVerify />} />
+    <Routes>
+      {/* Scanned straight from the QR code — a standalone ticket display with
+          no site navigation/branding shell, so it reads as "here's your
+          ticket" rather than the app loading. */}
+      <Route path="/ticket/:bookingRef" element={<TicketVerify />} />
 
-        <Route path="/login" element={<RoleSelect />} />
-        <Route path="/login/:role" element={<Login setUser={setUser} />} />
-        <Route path="/register/:role" element={<Register setUser={setUser} />} />
+      <Route
+        path="*"
+        element={
+          <div className="app-shell">
+            <Navbar user={user} setUser={setUser} />
+            <Routes>
+              <Route path="/" element={<Events />} />
+              <Route path="/events/:id" element={<EventSeatMap />} />
 
-        <Route
-          path="/my-bookings"
-          element={<RequireRole user={user} roles={['customer']}><BookingHistory /></RequireRole>}
-        />
-        <Route
-          path="/my-waitlist"
-          element={<RequireRole user={user} roles={['customer']}><MyWaitlist /></RequireRole>}
-        />
-        <Route
-          path="/organiser"
-          element={<RequireRole user={user} roles={['organiser', 'admin']}><OrganiserDashboard /></RequireRole>}
-        />
-        <Route
-          path="/admin/venues"
-          element={<RequireRole user={user} roles={['admin']}><AdminVenues /></RequireRole>}
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+              <Route path="/login" element={<RoleSelect />} />
+              <Route path="/login/:role" element={<Login setUser={setUser} />} />
+              <Route path="/register/:role" element={<Register setUser={setUser} />} />
+
+              <Route
+                path="/my-bookings"
+                element={<RequireRole user={user} roles={['customer']}><BookingHistory /></RequireRole>}
+              />
+              <Route
+                path="/my-waitlist"
+                element={<RequireRole user={user} roles={['customer']}><MyWaitlist /></RequireRole>}
+              />
+              <Route
+                path="/organiser"
+                element={<RequireRole user={user} roles={['organiser', 'admin']}><OrganiserDashboard /></RequireRole>}
+              />
+              <Route
+                path="/admin/venues"
+                element={<RequireRole user={user} roles={['admin']}><AdminVenues /></RequireRole>}
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        }
+      />
+    </Routes>
   );
 }
