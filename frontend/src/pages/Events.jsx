@@ -26,7 +26,11 @@ export default function Events() {
 
   useEffect(() => { load(); }, [type]);
 
-  const featured = events[0];
+  // The Featured Experience card highlights one specific show rather than
+  // just "whichever event sorts first" -- change FEATURED_TITLE_MATCH to
+  // feature a different show later.
+  const FEATURED_TITLE_MATCH = 'rocky aur rani';
+  const featured = events.find((e) => e.title.toLowerCase().includes(FEATURED_TITLE_MATCH)) || events[0];
 
   return (
     <div>
@@ -52,6 +56,7 @@ export default function Events() {
           </form>
         </div>
         <div className="hero-art">
+          <PosterImageLayer title={featured?.title} posterUrl={featured?.poster_url} />
           <div className="hero-card">
             <small>FEATURED EXPERIENCE</small>
             <h2>{featured ? featured.title : 'Discover something new'}</h2>
