@@ -112,6 +112,7 @@ router.post('/confirm', requireAuth, requireRole('customer'), async (req, res) =
     const qrDataUrl = await generateQrDataUrl(bookingRef);
     await query('UPDATE bookings SET qr_data_url = $1 WHERE id = $2', [qrDataUrl, bookingId]);
 
+    console.log(`[bookings] booking ${bookingRef} confirmed -- attempting confirmation email to ${customer.email}`);
     sendBookingConfirmation({
       to: customer.email,
       customerName: customer.name,
