@@ -200,7 +200,7 @@ button, input, select, textarea { font: inherit; }
   pointer-events: none;
   z-index: 0;
 }
-.ticket-body > * { position: relative; z-index: 1; }
+.ticket-body > *:not(.ticket-watermark) { position: relative; z-index: 1; }
 @media (max-width: 480px) {
   .ticket-body { flex-direction: column; align-items: stretch; }
   .ticket-body-right { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -216,6 +216,7 @@ button, input, select, textarea { font: inherit; }
 /* ---------- Hero ---------- */
 .hero { padding: 50px 0 40px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; }
 .eyebrow { font: 700 12px var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--indigo); margin: 0 0 14px; }
+.eyebrow-brand { font-family: var(--font-cursive); text-transform: none; letter-spacing: 0; font-size: 17px; font-weight: 400; vertical-align: middle; }
 .hero h1 { font: 700 48px/1.12 var(--font-display); letter-spacing: -0.02em; margin: 0 0 18px; }
 .hero h1 em { font-style: normal; background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero-art { height: 300px; border-radius: 24px; background: var(--grad-dark); position: relative; overflow: hidden; box-shadow: var(--shadow); }
@@ -352,7 +353,7 @@ a { color: var(--indigo); }
 .auth-split { min-height: calc(100vh - 72px); display: grid; grid-template-columns: 1fr 1fr; margin: 0 -24px; }
 .auth-side {
   background:
-    linear-gradient(190deg, rgba(96, 66, 190, 0.5) 0%, rgba(53, 30, 120, 0.72) 55%, rgba(30, 16, 70, 0.86) 100%),
+    linear-gradient(190deg, rgba(96, 66, 190, 0.45) 0%, rgba(53, 30, 120, 0.67) 55%, rgba(30, 16, 70, 0.81) 100%),
     url('/images/auth-bg-crowd.png') center 28% / cover no-repeat;
   color: #fff; display: flex; flex-direction: column; justify-content: center; padding: 60px; position: relative; overflow: hidden;
 }
@@ -397,10 +398,11 @@ a { color: var(--indigo); }
   padding: 64px 24px 72px;
   overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.55), rgba(232, 226, 255, 0.8)),
+    linear-gradient(180deg, rgba(255,255,255,0.4), rgba(224, 217, 255, 0.62)),
     url('/images/auth-bg-crowd.png') center 32% / cover no-repeat;
 }
 .role-hero-inner { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+.role-hero-inner .muted { color: #423f5c; font-weight: 600; }
 .role-hero-title { font-size: 44px; line-height: 1.12; margin: 10px 0 14px; }
 .text-gradient {
   background: var(--grad-primary);

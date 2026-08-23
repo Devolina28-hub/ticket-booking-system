@@ -31,7 +31,7 @@ export default function RoleSelect() {
   return (
     <div className="role-hero">
       <div className="role-hero-inner">
-        <p className="eyebrow center-text">Welcome to Encore</p>
+        <p className="eyebrow center-text">Welcome to <span className="eyebrow-brand">Encore</span></p>
         <h1 className="center-text role-hero-title">
           Your next experience<br />starts <span className="text-gradient">here</span>.
         </h1>
