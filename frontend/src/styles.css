@@ -142,24 +142,35 @@ button, input, select, textarea { font: inherit; }
 
 /* ---------- Panels ---------- */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-panel); padding: 28px; margin-bottom: 24px; box-shadow: var(--shadow-sm); }
-.tickets-page {
+.tickets-page { position: relative; }
+
+/* Soft stage-light glow on each individual ticket card */
+.ticket-card {
   position: relative;
-  border-radius: 24px;
-  padding-top: 8px;
+  overflow: hidden;
+  isolation: isolate;
 }
-.tickets-page::before {
+.ticket-card::before,
+.ticket-card::after {
   content: '';
   position: absolute;
-  top: -20px; left: -20px; right: -20px;
-  height: 260px;
-  background: url('/images/tickets-bg-glow.png') top center / cover no-repeat;
-  opacity: 0.08;
-  filter: saturate(1.3);
-  border-radius: 24px;
+  top: -60%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
   pointer-events: none;
   z-index: 0;
+  filter: blur(6px);
 }
-.tickets-page > * { position: relative; z-index: 1; }
+.ticket-card::before {
+  left: -40px;
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.16), transparent 70%);
+}
+.ticket-card::after {
+  right: -60px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.12), transparent 70%);
+}
+.ticket-card > * { position: relative; z-index: 1; }
 .grid { display: grid; gap: 18px; }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
@@ -329,9 +340,41 @@ a { color: var(--indigo); }
 @media (max-width: 700px) { .role-select-grid { grid-template-columns: 1fr; } }
 .role-card { background: #fff; border: 1.5px solid var(--line); border-radius: 20px; padding: 32px 26px; text-align: center; text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
 .role-card:hover { transform: translateY(-6px); box-shadow: var(--shadow); border-color: var(--indigo); }
-.role-card .role-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--grad-primary); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 24px; }
+.role-card .role-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--grad-primary); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 24px; color: #fff; }
 .role-card h3 { margin: 0 0 8px; }
 .role-card p { font-size: 13px; margin: 0; }
+
+/* ---------- Role select hero (landing / choose portal) ---------- */
+.role-hero {
+  position: relative;
+  margin: 0 -24px 0;
+  padding: 64px 24px 56px;
+  overflow: hidden;
+  background:
+    linear-gradient(100deg, rgba(255,255,255,0.55) 38%, rgba(255,255,255,0.92) 70%),
+    url('/images/auth-bg-crowd.png') left center / cover no-repeat,
+    linear-gradient(135deg, #eef0fe, #f6f2ff);
+}
+.role-hero-inner { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+.role-hero-title { font-size: 44px; line-height: 1.12; margin: 10px 0 14px; }
+.text-gradient {
+  background: var(--grad-primary);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@media (max-width: 600px) { .role-hero-title { font-size: 30px; } }
+
+.role-cta-bar {
+  display: flex; align-items: center; gap: 18px;
+  background: #fff; border: 1px solid var(--line); border-radius: 20px;
+  padding: 20px 26px; margin: 36px auto 0; max-width: 780px; box-shadow: var(--shadow-sm);
+}
+.role-cta-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--grad-soft); color: var(--indigo-dark); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.role-cta-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.role-cta-text strong { font-size: 15px; }
+.role-cta-text span { font-size: 13px; color: var(--muted); }
+@media (max-width: 600px) {
+  .role-cta-bar { flex-direction: column; align-items: flex-start; text-align: left; }
+}
 
 @media (max-width: 900px) {
   .booking-grid { grid-template-columns: 1fr !important; }

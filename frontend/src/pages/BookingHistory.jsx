@@ -44,7 +44,7 @@ export default function BookingHistory() {
       ) : (
         <div className="stack">
           {bookings.map((b) => (
-            <div className="panel" key={b.id} style={{ marginBottom: 0 }}>
+            <div className="panel ticket-card" key={b.id} style={{ marginBottom: 0 }}>
               <div className="row-between">
                 <div>
                   <span className={`pill-badge ${b.status === 'cancelled' ? 'danger' : 'success'}`}>
