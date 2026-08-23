@@ -26,6 +26,7 @@
 
   --font-display: 'Poppins', 'Inter', sans-serif;
   --font-body: 'Inter', sans-serif;
+  --font-cursive: 'Great Vibes', cursive;
 
   --space-1: 8px;
   --space-2: 12px;
@@ -88,7 +89,16 @@ button, input, select, textarea { font: inherit; }
   background: var(--grad-primary);
   display: inline-block;
 }
-.navbar .brand-text { background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.navbar .brand-text {
+  font-family: var(--font-cursive);
+  font-size: 34px;
+  font-weight: 400;
+  color: #000;
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  line-height: 1;
+}
 .nav-links { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; }
 .nav-links a, .nav-links button.linklike {
   color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px;

@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS events (
   organiser_id INTEGER NOT NULL REFERENCES users(id),
   event_date TEXT NOT NULL,
   event_time TEXT NOT NULL,
+  poster_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -196,6 +197,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_active_unique
   WHERE status IN ('waiting','offered');
 
 CREATE INDEX IF NOT EXISTS idx_waitlist_queue ON waitlist(event_id, category, status, joined_at);
+
+-- Migration for databases created before poster uploads existed -- a no-op
+-- once the column is already present (including on brand-new databases,
+-- where CREATE TABLE above already added it).
+ALTER TABLE events ADD COLUMN IF NOT EXISTS poster_url TEXT;
 `;
 
 let schemaReadyPromise = null;

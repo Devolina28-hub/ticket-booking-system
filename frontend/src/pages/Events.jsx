@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import PosterImageLayer from '../components/PosterImageLayer.jsx';
 
 const POSTER_CLASSES = ['p1', 'p2', 'p3', 'p4'];
 
@@ -90,6 +91,7 @@ export default function Events() {
               return (
                 <Link to={`/events/${ev.id}`} className="event-card" key={ev.id}>
                   <div className={`poster ${posterClass}`}>
+                    <PosterImageLayer title={ev.title} posterUrl={ev.poster_url} />
                     <div className="poster-content">
                       <small>{ev.type.toUpperCase()}</small>
                       <strong>{ev.title}</strong>

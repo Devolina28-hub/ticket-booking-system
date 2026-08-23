@@ -5,7 +5,8 @@ export default function OrganiserDashboard() {
   const user = getUser();
   const [venues, setVenues] = useState([]);
   const [events, setEvents] = useState([]);
-  const [form, setForm] = useState({ title: '', description: '', type: 'movie', venue_id: '', event_date: '', event_time: '' });
+  const [form, setForm] = useState({ title: '', description: '', type: 'movie', venue_id: '', event_date: '', event_time: '', poster_url: '' });
+  const [posterError, setPosterError] = useState('');
   const [pricing, setPricing] = useState([{ category: 'Premium', price: 500 }, { category: 'Standard', price: 300 }]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -32,6 +33,28 @@ export default function OrganiserDashboard() {
     setPricing((p) => p.map((row, idx) => idx === i ? { ...row, [key]: value } : row));
   }
 
+  // Reads the chosen file straight into a base64 data URL client-side --
+  // no separate upload endpoint needed, it's just sent along as poster_url
+  // in the create-event payload (same pattern the app already uses for QR
+  // codes). Left empty, the listing keeps its default gradient poster.
+  function handlePosterFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPosterError('');
+    if (!file.type.startsWith('image/')) {
+      setPosterError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      setPosterError('Image is too large (max 6MB).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => updateForm('poster_url', reader.result);
+    reader.onerror = () => setPosterError('Could not read that file.');
+    reader.readAsDataURL(file);
+  }
+
   async function createEvent(e) {
     e.preventDefault();
     setError(''); setSuccess('');
@@ -42,7 +65,8 @@ export default function OrganiserDashboard() {
         pricing: pricing.map((p) => ({ category: p.category, price: Number(p.price) })),
       });
       setSuccess('Event created!');
-      setForm({ title: '', description: '', type: 'movie', venue_id: '', event_date: '', event_time: '' });
+      setForm({ title: '', description: '', type: 'movie', venue_id: '', event_date: '', event_time: '', poster_url: '' });
+      setPosterError('');
       await load();
     } catch (err) {
       setError(err.message);
@@ -96,6 +120,21 @@ export default function OrganiserDashboard() {
           <div className="field">
             <label>Description</label>
             <textarea rows={2} value={form.description} onChange={(e) => updateForm('description', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>Poster image (optional)</label>
+            <input type="file" accept="image/*" onChange={handlePosterFile} />
+            <p className="muted" style={{ fontSize: 12, margin: '4px 0 0' }}>
+              If left blank, the listing keeps its default gradient poster.
+            </p>
+            {posterError && <div className="alert alert-error" style={{ marginTop: 8 }}>{posterError}</div>}
+            {form.poster_url && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                <img src={form.poster_url} alt="Poster preview" style={{ width: 90, height: 60, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => updateForm('poster_url', '')}>Remove</button>
+              </div>
+            )}
           </div>
           <div className="grid grid-3">
             <div className="field">

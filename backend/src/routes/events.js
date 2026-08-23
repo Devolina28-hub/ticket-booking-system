@@ -80,9 +80,16 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', requireAuth, requireRole('organiser', 'admin'), async (req, res) => {
   try {
-    const { title, description, type, venue_id, event_date, event_time, pricing } = req.body;
+    const { title, description, type, venue_id, event_date, event_time, pricing, poster_url } = req.body;
     if (!title || !venue_id || !event_date || !event_time || !Array.isArray(pricing)) {
       return res.status(400).json({ error: 'title, venue_id, event_date, event_time, pricing[] are required' });
+    }
+
+    // poster_url is optional and, when present, is a data: URL the frontend
+    // read from the organiser's uploaded file (see OrganiserDashboard.jsx) --
+    // sanity-check it so we don't store arbitrary junk in the column.
+    if (poster_url && typeof poster_url === 'string' && poster_url.length > 8 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Poster image is too large (max ~6MB)' });
     }
 
     const venue = await queryOne('SELECT * FROM venues WHERE id = $1', [venue_id]);
@@ -93,9 +100,9 @@ router.post('/', requireAuth, requireRole('organiser', 'admin'), async (req, res
 
     const eventId = await withTransaction(async (trx) => {
       const eventRow = await trx.queryOne(
-        `INSERT INTO events (title, description, type, venue_id, organiser_id, event_date, event_time)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [title, description || null, type || 'event', venue_id, req.user.id, event_date, event_time]
+        `INSERT INTO events (title, description, type, venue_id, organiser_id, event_date, event_time, poster_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [title, description || null, type || 'event', venue_id, req.user.id, event_date, event_time, poster_url || null]
       );
 
       for (const p of pricing) {

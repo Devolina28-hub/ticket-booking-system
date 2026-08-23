@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, getUser } from '../api.js';
 import SeatGrid from '../components/SeatGrid.jsx';
+import PosterImageLayer from '../components/PosterImageLayer.jsx';
 
 const MAX_SEATS = 4;
 const BOOKING_FEE = 49;
@@ -77,7 +78,12 @@ export default function EventSeatMap() {
       if (holdExpiresAt) {
         try { await api.releaseSeats(id, [seat.id]); } catch { /* ignore */ }
       }
-      setSelected((sel) => sel.filter((s) => s.id !== seat.id));
+      setSelected((sel) => {
+        const next = sel.filter((s) => s.id !== seat.id);
+        // No seats left selected -> nothing is held anymore, so stop the countdown.
+        if (next.length === 0) setHoldExpiresAt(null);
+        return next;
+      });
       return;
     }
 
@@ -289,9 +295,10 @@ export default function EventSeatMap() {
       <div className="event-header" style={{ display: 'grid', gridTemplateColumns: '230px 1fr', gap: 28, marginBottom: 32 }}>
         <div style={{
           height: 260, borderRadius: 16, padding: 20, color: '#fff', display: 'flex', alignItems: 'end',
-          background: 'linear-gradient(145deg, #221f4b, #5b5cf0)',
+          background: 'linear-gradient(145deg, #221f4b, #5b5cf0)', position: 'relative', overflow: 'hidden',
         }}>
-          <div>
+          <PosterImageLayer title={event.title} posterUrl={event.poster_url} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
             <small style={{ fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', opacity: 0.85 }}>{event.venue_name?.toUpperCase()}</small>
             <div style={{ font: '700 22px var(--font-display)', marginTop: 6 }}>{event.title}</div>
           </div>
