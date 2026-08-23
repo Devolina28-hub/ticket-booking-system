@@ -69,7 +69,7 @@ export default function Register({ setUser }) {
         Already have an account? <Link to={`/login/${role}`}>Log in</Link>
       </p>
       <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-        <Link to="/login">← Choose a different portal</Link>
+        <Link to="/login" className="portal-switch-link">← Choose a different portal</Link>
       </p>
     </AuthLayout>
   );

@@ -23,8 +23,8 @@ const ICONS = {
 
 const ROLES = [
   { key: 'customer', icon: ICONS.ticket, title: 'Customer', desc: 'Discover events, book seats, and manage your tickets.', cta: 'Continue as Customer', loginTo: '/login/customer' },
-  { key: 'organiser', icon: ICONS.calendar, title: 'Organiser', desc: 'Create events, manage listings, and track sales.', cta: 'Organiser portal', loginTo: '/login/organiser' },
-  { key: 'admin', icon: ICONS.shield, title: 'Admin', desc: 'Manage venues, events, and platform operations.', cta: 'Admin portal', loginTo: '/login/admin' },
+  { key: 'organiser', icon: ICONS.calendar, title: 'Organiser', desc: 'Create events, manage listings, and track sales.', cta: 'Continue as Organiser', loginTo: '/login/organiser' },
+  { key: 'admin', icon: ICONS.shield, title: 'Admin', desc: 'Manage venues, events, and platform operations.', cta: 'Continue as Admin', loginTo: '/login/admin' },
 ];
 
 export default function RoleSelect() {
@@ -45,21 +45,9 @@ export default function RoleSelect() {
               <div className="role-icon">{r.icon}</div>
               <h3>{r.title}</h3>
               <p style={{ marginBottom: 20 }}>{r.desc}</p>
-              <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                <Link to={r.loginTo} className="btn btn-primary btn-sm btn-block">{r.cta} →</Link>
-                <Link to={r.loginTo} className="btn btn-secondary btn-sm btn-block">Learn more</Link>
-              </div>
+              <Link to={r.loginTo} className="btn btn-primary btn-sm btn-block">{r.cta}</Link>
             </div>
           ))}
-        </div>
-
-        <div className="role-cta-bar">
-          <div className="role-cta-icon">{ICONS.calendar}</div>
-          <div className="role-cta-text">
-            <strong>Looking for something to do?</strong>
-            <span>Explore upcoming concerts, movies, and live events near you.</span>
-          </div>
-          <Link to="/" className="btn btn-secondary btn-sm">Explore events →</Link>
         </div>
       </div>
     </div>

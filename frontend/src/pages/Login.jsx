@@ -65,7 +65,7 @@ export default function Login({ setUser }) {
         </p>
       )}
       <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-        <Link to="/login">← Choose a different portal</Link>
+        <Link to="/login" className="portal-switch-link">← Choose a different portal</Link>
       </p>
       <hr className="divider" />
       <p className="label-sm">Demo account (password123)</p>

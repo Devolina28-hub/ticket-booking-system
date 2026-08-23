@@ -4,7 +4,7 @@ const ROLE_META = {
   customer: {
     badge: 'Customer portal',
     heading: 'Book your seats in seconds.',
-    tagline: 'Browse movies and concerts, pick your seats on a live map, and get a QR ticket instantly.',
+    tagline: 'Browse movies and concerts, choose your seats on a live map, and get your QR ticket instantly.',
   },
   organiser: {
     badge: 'Organiser portal',
