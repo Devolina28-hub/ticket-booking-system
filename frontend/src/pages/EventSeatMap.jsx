@@ -161,7 +161,7 @@ export default function EventSeatMap() {
               Time · {event.event_time}<br />
               Amount paid · ₹{confirmedBooking.total_amount.toFixed(0)}
             </p>
-            <p className="muted">A confirmation email with this QR code has also been sent to you. Scanning the QR opens a live ticket-status page.</p>
+            <p className="muted">A confirmation email with this QR code has also been sent to you. Scanning the QR shows your seat details directly.</p>
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
               <button className="btn btn-secondary" onClick={() => navigate('/my-bookings')}>View my tickets</button>
               <button className="btn btn-dark" onClick={() => navigate('/')}>Browse more</button>

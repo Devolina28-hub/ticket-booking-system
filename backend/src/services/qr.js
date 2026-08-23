@@ -5,13 +5,22 @@ function generateBookingRef() {
   return 'BK-' + uuidv4().split('-')[0].toUpperCase();
 }
 
-// The QR encodes a real URL to the public ticket-verification page, so
-// scanning it with a phone camera opens a page showing live booking status
-// (valid / cancelled / not found) instead of raw, unreadable JSON text.
-async function generateQrDataUrl(bookingRef) {
-  const frontendUrl = process.env.FRONTEND_URL || 'ticket-booking-system-delta-six.vercel.app';
-  const verifyUrl = `${frontendUrl.replace(/\/$/, '')}/ticket/${bookingRef}`;
-  return QRCode.toDataURL(verifyUrl, { errorCorrectionLevel: 'M', margin: 1, width: 300 });
+// The QR encodes the ticket's own details as plain text (not a URL), so
+// scanning it with any phone camera/QR reader shows the seat info directly
+// in the scan result -- no webpage, no app, nothing to load.
+async function generateQrDataUrl({ bookingRef, customerName, event, seats }) {
+  const seatList = seats.map((s) => `${s.row_label}${s.seat_number} (${s.category})`).join(', ');
+  const text = [
+    'ENCORE TICKET',
+    `Event: ${event.title}`,
+    `Date: ${event.event_date} ${event.event_time}`,
+    `Seats: ${seatList}`,
+    `Booking Ref: ${bookingRef}`,
+    `Name: ${customerName}`,
+  ].join('\n');
+  // errorCorrectionLevel 'M' + wider margin keeps it reliably scannable even
+  // with this much text encoded (plain-text QRs need more modules than a URL).
+  return QRCode.toDataURL(text, { errorCorrectionLevel: 'M', margin: 2, width: 340 });
 }
 
 module.exports = { generateBookingRef, generateQrDataUrl };
