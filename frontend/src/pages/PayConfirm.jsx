@@ -49,7 +49,14 @@ export default function PayConfirm() {
     setDeciding(true);
     setError('');
     try {
-      const data = await api.paymentDecision(paymentRef, approve);
+      // This is a mock payment screen -- no real gateway is called here.
+      // We wait ~5s before revealing the result so the "Yes" path feels like
+      // an actual payment is being processed and the confirmation email has
+      // time to land, instead of flipping to "approved" instantly.
+      const [data] = await Promise.all([
+        api.paymentDecision(paymentRef, approve),
+        approve ? new Promise((resolve) => setTimeout(resolve, 5000)) : Promise.resolve(),
+      ]);
       setStatus((s) => ({ ...s, status: data.status, booking: data.booking || null }));
     } catch (err) {
       setError(err.message);
@@ -144,9 +151,19 @@ export default function PayConfirm() {
             No, cancel
           </button>
           <button className="btn btn-primary" disabled={deciding} onClick={() => decide(true)}>
-            {deciding ? 'Confirming…' : 'Yes, pay now'}
+            {deciding ? 'Please wait…' : 'Yes, pay now'}
           </button>
         </div>
+        {deciding && (
+          <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+            Confirming your payment and sending the ticket email — this takes about 5 seconds.
+          </p>
+        )}
+        <p className="muted" style={{ marginTop: 20, fontSize: 12 }}>
+          This is a simulated "Scan to Pay" screen for demo purposes only. No real payment
+          gateway is connected and no money moves — tapping Yes/No only updates the booking
+          status.
+        </p>
       </div>
     </div>
   );

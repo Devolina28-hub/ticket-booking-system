@@ -32,7 +32,7 @@ export default function BookingHistory() {
   if (loading) return <div className="center-text"><div className="spinner" style={{ margin: '60px auto' }} /></div>;
 
   return (
-    <div>
+    <div className="tickets-page">
       <div className="panel">
         <p className="eyebrow">Your tickets</p>
         <h1>My bookings</h1>
@@ -47,7 +47,7 @@ export default function BookingHistory() {
             <div className="panel" key={b.id} style={{ marginBottom: 0 }}>
               <div className="row-between">
                 <div>
-                  <span className={`pill-badge ${b.status === 'cancelled' ? '' : 'accent'}`}>
+                  <span className={`pill-badge ${b.status === 'cancelled' ? 'danger' : 'success'}`}>
                     {b.status}
                   </span>
                   <h3 style={{ margin: '8px 0 4px' }}>{b.title}</h3>
