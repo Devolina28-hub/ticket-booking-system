@@ -7,7 +7,12 @@ const router = express.Router();
 
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, password, role } = req.body;
+    // Normalize so "User@Example.com" and "user@example.com" are always the
+    // same account -- Postgres compares email = $1 byte-for-byte otherwise,
+    // and phone keyboards frequently auto-capitalize the first letter of an
+    // email field even with type="email" set.
+    const email = String(req.body.email || '').trim().toLowerCase();
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email and password are required' });
     }
@@ -33,7 +38,8 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const { password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
     const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
