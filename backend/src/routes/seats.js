@@ -12,15 +12,23 @@ const MAX_SEATS_PER_BOOKING = Number(process.env.MAX_SEATS_PER_BOOKING || 5);
  * POST /api/events/:eventId/seats/hold
  * Body: { seat_ids: [1,2,3] }
  *
+ * The frontend sends the customer's FULL current selection on every call
+ * (not just the newly-added seat), so this must succeed both for brand-new
+ * seats AND for seats this same customer already holds -- otherwise adding
+ * a 2nd/3rd/etc seat would fail because the earlier seat(s) are no longer
+ * 'available'. Re-claiming an already-held-by-me seat just refreshes its
+ * hold_expires_at to match the rest of the selection, so the whole group
+ * stays synchronized on one 10-minute countdown.
+ *
  * Concurrency protection: each seat is claimed with
  *   UPDATE event_seats SET status='held', held_by=$1, hold_expires_at=$2
- *   WHERE id=$3 AND event_id=$4 AND status='available'
+ *   WHERE id=$3 AND event_id=$4 AND (status='available' OR (status='held' AND held_by=$1))
  * Postgres serializes concurrent UPDATEs targeting the same row: if two
  * requests race for the same seat, the second UPDATE blocks until the first
  * transaction commits or rolls back, then re-evaluates its WHERE clause
- * against the now-committed row -- so it correctly finds status is no longer
- * 'available' and affects 0 rows. The whole batch runs in one transaction so
- * a customer either holds ALL requested seats or NONE.
+ * against the now-committed row -- so it correctly finds the seat is held by
+ * someone else and affects 0 rows. The whole batch runs in one transaction
+ * so a customer either holds ALL requested seats or NONE.
  */
 router.post('/hold', requireAuth, requireRole('customer'), async (req, res) => {
   try {
@@ -41,7 +49,8 @@ router.post('/hold', requireAuth, requireRole('customer'), async (req, res) => {
       for (const seatId of seat_ids) {
         const rows = await trx.query(
           `UPDATE event_seats SET status = 'held', held_by = $1, hold_expires_at = $2
-           WHERE id = $3 AND event_id = $4 AND status = 'available'
+           WHERE id = $3 AND event_id = $4
+             AND (status = 'available' OR (status = 'held' AND held_by = $1))
            RETURNING id`,
           [req.user.id, expiresAt, seatId, eventId]
         );
