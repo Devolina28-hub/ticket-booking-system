@@ -140,6 +140,7 @@ export default function PayConfirm() {
 
         <div style={{ textAlign: 'left', background: 'var(--surface2)', borderRadius: 14, padding: 20, marginBottom: 20 }}>
           <div className="price-row"><span>Seats</span><span>{seat_count}</span></div>
+          <div className="price-row"><span>Persons</span><span>{seat_count}</span></div>
           <div className="price-row total"><span>Amount</span><span>₹{Number(amount).toFixed(0)}</span></div>
         </div>
 

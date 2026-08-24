@@ -4,7 +4,7 @@ import { api, getUser } from '../api.js';
 import SeatGrid from '../components/SeatGrid.jsx';
 import PosterImageLayer from '../components/PosterImageLayer.jsx';
 
-const MAX_SEATS = 4;
+const MAX_SEATS = 5;
 const BOOKING_FEE = 49;
 
 export default function EventSeatMap() {
@@ -139,7 +139,7 @@ export default function EventSeatMap() {
       try {
         const data = await api.paymentStatus(payment.payment_ref);
         if (data.status === 'approved') {
-          setConfirmedBooking(data.booking);
+          setConfirmedBooking({ ...data.booking, seatCount: selected.length });
           setSelected([]);
           setHoldExpiresAt(null);
           setPayment(null);
@@ -262,6 +262,7 @@ export default function EventSeatMap() {
             <p>
               Date · {event.event_date}<br />
               Time · {event.event_time}<br />
+              Number of Persons · {confirmedBooking.seatCount}<br />
               Amount paid · ₹{confirmedBooking.total_amount.toFixed(0)}
             </p>
             <p className="muted">A confirmation email with this QR code has also been sent to you. Scanning the QR opens your digital ticket with full seat details.</p>
@@ -367,6 +368,11 @@ export default function EventSeatMap() {
           <div className="chips">
             {selected.length ? selected.map((s) => <span className="chip" key={s.id}>{s.row_label}{s.seat_number}</span>) : <span className="chip">No seats selected</span>}
           </div>
+          {selected.length > 0 && (
+            <p className="muted" style={{ margin: '2px 0 0', fontSize: 13 }}>
+              {selected.length} {selected.length === 1 ? 'Person' : 'Persons'}
+            </p>
+          )}
           {remainingSec !== null && (
             <div className="timer-box">
               SEATS HELD FOR <strong>{Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}</strong>

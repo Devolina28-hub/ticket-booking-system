@@ -6,6 +6,7 @@ const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
 const router = express.Router({ mergeParams: true });
 
 const HOLD_TTL_MIN = Number(process.env.SEAT_HOLD_TTL_MINUTES || 10);
+const MAX_SEATS_PER_BOOKING = Number(process.env.MAX_SEATS_PER_BOOKING || 5);
 
 /**
  * POST /api/events/:eventId/seats/hold
@@ -28,6 +29,9 @@ router.post('/hold', requireAuth, requireRole('customer'), async (req, res) => {
     const { seat_ids } = req.body;
     if (!Array.isArray(seat_ids) || seat_ids.length === 0) {
       return res.status(400).json({ error: 'seat_ids[] is required' });
+    }
+    if (seat_ids.length > MAX_SEATS_PER_BOOKING) {
+      return res.status(400).json({ error: `You can hold at most ${MAX_SEATS_PER_BOOKING} seats per booking.` });
     }
 
     const expiresAt = new Date(Date.now() + HOLD_TTL_MIN * 60 * 1000).toISOString();

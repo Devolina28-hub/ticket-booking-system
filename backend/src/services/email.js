@@ -97,6 +97,7 @@ async function sendMail({ to, subject, html, attachments }) {
 
 async function sendBookingConfirmation({ to, customerName, event, seats, bookingRef, qrDataUrl, totalAmount }) {
   const seatList = seats.map((s) => `${s.row_label}${s.seat_number} (${s.category})`).join(', ');
+  const numberOfPersons = seats.length;
   const html = `
     <div style="font-family: sans-serif; max-width:520px; margin:auto;">
       <h2 style="color:#4340C9;">Booking Confirmed 🎟️</h2>
@@ -104,6 +105,7 @@ async function sendBookingConfirmation({ to, customerName, event, seats, booking
       <p>Your booking for <strong>${event.title}</strong> on ${event.event_date} at ${event.event_time} is confirmed.</p>
       <p><strong>Booking Reference:</strong> ${bookingRef}<br/>
       <strong>Seats:</strong> ${seatList}<br/>
+      <strong>Number of Persons:</strong> ${numberOfPersons}<br/>
       <strong>Total Paid:</strong> ₹${totalAmount.toFixed(0)}</p>
       <p>Show this QR code at entry — scanning it opens your digital ticket with full seat details:</p>
       <img src="${qrDataUrl}" alt="QR Code" style="width:200px;height:200px;" />

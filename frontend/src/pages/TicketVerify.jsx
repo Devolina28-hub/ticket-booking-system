@@ -65,6 +65,9 @@ export default function TicketVerify() {
           <p style={{ margin: '10px 0 2px', fontWeight: 700, fontSize: 16 }}>
             Seats: {seats.map((s) => `${s.row_label}${s.seat_number} (${s.category})`).join(', ')}
           </p>
+          <p className="muted" style={{ margin: '2px 0' }}>
+            {seats.length} {seats.length === 1 ? 'Person' : 'Persons'}
+          </p>
           <p style={{ margin: '10px 0 0', fontWeight: 700 }}>
             Ticket holder: {booking.customer_name}
           </p>

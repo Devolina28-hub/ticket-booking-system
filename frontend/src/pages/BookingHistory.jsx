@@ -30,6 +30,12 @@ const ICONS = {
       <path d="M9 13c6.667 0 6.667-10 0-10" />
     </svg>
   ),
+  person: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.87 3.13-6.5 7-6.5s7 2.63 7 6.5" />
+    </svg>
+  ),
 };
 
 export default function BookingHistory() {
@@ -93,6 +99,10 @@ export default function BookingHistory() {
                     <div className="ticket-info-row">
                       <span className="ticket-info-icon">{ICONS.seat}</span>
                       <span>Seats: {b.seats.map((s) => `${s.row_label}${s.seat_number} (${s.category})`).join(', ')}</span>
+                    </div>
+                    <div className="ticket-info-row">
+                      <span className="ticket-info-icon">{ICONS.person}</span>
+                      <span>{b.seats.length} {b.seats.length === 1 ? 'Person' : 'Persons'}</span>
                     </div>
                     <div className="ticket-info-row">
                       <span className="ticket-info-icon">{ICONS.rupee}</span>

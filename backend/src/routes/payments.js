@@ -14,6 +14,7 @@ const router = express.Router();
 
 // How long the QR code (and the seat holds behind it) stay valid for.
 const PAYMENT_TTL_MIN = Number(process.env.PAYMENT_QR_TTL_MINUTES || 10);
+const MAX_SEATS_PER_BOOKING = Number(process.env.MAX_SEATS_PER_BOOKING || 5);
 
 // Releases a session's seats back to 'available' -- used both when a scan
 // is declined and when a session times out unscanned.
@@ -46,6 +47,9 @@ router.post('/initiate', requireAuth, requireRole('customer'), async (req, res) 
     const { event_id, seat_ids } = req.body;
     if (!event_id || !Array.isArray(seat_ids) || seat_ids.length === 0) {
       return res.status(400).json({ error: 'event_id and seat_ids[] are required' });
+    }
+    if (seat_ids.length > MAX_SEATS_PER_BOOKING) {
+      return res.status(400).json({ error: `You can book at most ${MAX_SEATS_PER_BOOKING} seats per booking.` });
     }
 
     const event = await queryOne('SELECT * FROM events WHERE id = $1', [event_id]);

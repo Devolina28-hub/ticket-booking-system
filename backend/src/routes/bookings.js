@@ -7,6 +7,7 @@ const { offerSeatToNextInLine } = require('../services/waitlistService');
 const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
 
 const router = express.Router();
+const MAX_SEATS_PER_BOOKING = Number(process.env.MAX_SEATS_PER_BOOKING || 5);
 
 /**
  * GET /api/bookings/verify/:bookingRef
@@ -60,6 +61,9 @@ router.post('/confirm', requireAuth, requireRole('customer'), async (req, res) =
     const { event_id, seat_ids } = req.body;
     if (!event_id || !Array.isArray(seat_ids) || seat_ids.length === 0) {
       return res.status(400).json({ error: 'event_id and seat_ids[] are required' });
+    }
+    if (seat_ids.length > MAX_SEATS_PER_BOOKING) {
+      return res.status(400).json({ error: `You can book at most ${MAX_SEATS_PER_BOOKING} seats per booking.` });
     }
 
     const event = await queryOne('SELECT * FROM events WHERE id = $1', [event_id]);
