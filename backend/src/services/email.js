@@ -1,21 +1,12 @@
-// Sends email via Resend's HTTP API (https://api.resend.com/emails) instead
-// of SMTP. Render's free tier blocks all outbound traffic on SMTP ports
-// (25, 465, 587) as of Sept 2025, so nodemailer/SMTP simply cannot work
-// here -- the connection hangs until it times out. Resend's API sends over
-// normal HTTPS (port 443), which is not blocked.
-//
-// IMPORTANT: Resend requires a verified sending domain before it will
-// deliver to real recipients. Until RESEND_FROM_DOMAIN_VERIFIED (see below)
-// points at a domain you've verified in the Resend dashboard, this falls
-// back to Resend's onboarding@resend.dev sandbox sender, which Resend will
-// ONLY deliver to the email address you signed up to Resend with -- not to
-// actual customers. Booking confirmations to real customers will silently
-// fail (Resend returns a 403) until a domain is verified. See
-// resend.com/domains -> Add Domain, then set SMTP_FROM to an address on
-// that domain.
+// Sends email via Brevo's HTTP API (https://api.brevo.com/v3/smtp/email)
+// instead of SMTP. Render's free tier blocks all outbound traffic on SMTP
+// ports (25, 465, 465, 587) as of Sept 2025, so nodemailer/SMTP simply
+// cannot work here -- the connection hangs until it times out. The HTTP
+// API sends over normal HTTPS (port 443), which is not blocked, and uses
+// the same Brevo account.
 
-const RESEND_API_URL = 'https://api.resend.com/emails';
-const RESEND_DOMAINS_URL = 'https://api.resend.com/domains';
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const BREVO_ACCOUNT_URL = 'https://api.brevo.com/v3/account';
 
 function env(key) {
   const v = process.env[key];
@@ -23,14 +14,17 @@ function env(key) {
 }
 
 function apiKey() {
-  return env('RESEND_API_KEY');
+  return env('BREVO_API_KEY');
 }
 
-// Resend's "from" field takes the same "Name <email>" string format we
-// already store in SMTP_FROM, so no reshaping needed -- just fall back to
-// the sandbox sender if nothing is configured.
-function fromAddress() {
-  return env('SMTP_FROM') || '"Encore Tickets" <onboarding@resend.dev>';
+// "Encore Tickets <no-reply@ticketbooking.local>" -> { name, email }
+function parseSender() {
+  const raw = env('SMTP_FROM') || '"Encore Tickets" <no-reply@ticketbooking.local>';
+  const match = raw.match(/^"?([^"<]*)"?\s*<([^>]+)>\s*$/);
+  if (match) {
+    return { name: match[1].trim() || undefined, email: match[2].trim() };
+  }
+  return { email: raw };
 }
 
 // Runs once at server startup (see server.js) so you get a clear pass/fail
@@ -39,57 +33,50 @@ async function verifyEmailConfig() {
   const key = apiKey();
   if (!key) {
     console.error(
-      '[email] RESEND_API_KEY is not set -- emails will NOT be sent.\n' +
-      '  Fix: in your Resend account go to API Keys, create a key with ' +
-      '"Sending access", and add it as RESEND_API_KEY in Render -> your service -> Environment.'
+      '[email] BREVO_API_KEY is not set -- emails will NOT be sent.\n' +
+      '  Fix: in your Brevo account go to Settings -> SMTP & API -> API Keys tab, ' +
+      'create a key, and add it as BREVO_API_KEY in Render -> your service -> Environment.'
     );
     return;
   }
   try {
-    const res = await fetch(RESEND_DOMAINS_URL, { headers: { Authorization: `Bearer ${key}` } });
+    const res = await fetch(BREVO_ACCOUNT_URL, { headers: { 'api-key': key } });
     if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      const verifiedDomains = (data.data || []).filter((d) => d.status === 'verified');
-      console.log(`[email] Resend API key OK -- real emails will be sent.${
-        verifiedDomains.length
-          ? ` Verified domain(s): ${verifiedDomains.map((d) => d.name).join(', ')}.`
-          : ' WARNING: no verified domain yet -- falling back to the onboarding@resend.dev ' +
-            'sandbox sender, which only delivers to your own Resend account email, not real customers.'
-      }`);
+      console.log('[email] Brevo API key OK -- real emails will be sent.');
     } else {
       const text = await res.text().catch(() => '');
-      console.error(`[email] Resend API key check FAILED (status ${res.status}): ${text}`);
+      console.error(`[email] Brevo API key check FAILED (status ${res.status}): ${text}`);
     }
   } catch (err) {
-    console.error('[email] Resend API check errored:', err.message);
+    console.error('[email] Brevo API check errored:', err.message);
   }
 }
 
 async function sendMail({ to, subject, html, attachments }) {
   const key = apiKey();
   if (!key) {
-    const err = new Error('RESEND_API_KEY not configured');
+    const err = new Error('BREVO_API_KEY not configured');
     console.error(`[email] FAILED to send "${subject}" to ${to}: ${err.message}`);
     throw err;
   }
 
   const body = {
-    from: fromAddress(),
-    to: [to],
+    sender: parseSender(),
+    to: [{ email: to }],
     subject,
-    html,
+    htmlContent: html,
   };
   if (attachments && attachments.length) {
-    // Resend's API wants { filename, content } where content is base64
-    // (no data: URL prefix).
-    body.attachments = attachments.map((a) => ({ filename: a.filename, content: a.content }));
+    // Brevo's API wants { name, content } where content is base64 (no data:
+    // URL prefix) and name must end in a real file extension.
+    body.attachment = attachments.map((a) => ({ name: a.filename, content: a.content }));
   }
 
   let res;
   try {
-    res = await fetch(RESEND_API_URL, {
+    res = await fetch(BREVO_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'api-key': key },
       body: JSON.stringify(body),
     });
   } catch (err) {
@@ -99,12 +86,12 @@ async function sendMail({ to, subject, html, attachments }) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    console.error(`[email] FAILED to send "${subject}" to ${to}. Resend status ${res.status}: ${text}`);
-    throw new Error(`Resend API error ${res.status}: ${text}`);
+    console.error(`[email] FAILED to send "${subject}" to ${to}. Brevo status ${res.status}: ${text}`);
+    throw new Error(`Brevo API error ${res.status}: ${text}`);
   }
 
   const data = await res.json().catch(() => ({}));
-  console.log(`[email] Sent "${subject}" to ${to} (id: ${data.id || 'n/a'})`);
+  console.log(`[email] Sent "${subject}" to ${to} (messageId: ${data.messageId || 'n/a'})`);
   return data;
 }
 
