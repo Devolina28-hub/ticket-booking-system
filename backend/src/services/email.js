@@ -1,82 +1,89 @@
-// Sends email via Brevo's HTTP API (https://api.brevo.com/v3/smtp/email)
-// instead of SMTP. Render's free tier blocks all outbound traffic on SMTP
-// ports (25, 465, 465, 587) as of Sept 2025, so nodemailer/SMTP simply
-// cannot work here -- the connection hangs until it times out. The HTTP
-// API sends over normal HTTPS (port 443), which is not blocked, and uses
-// the same Brevo account.
+// Sends email via EmailJS's REST API (https://api.emailjs.com/api/v1.0/email/send),
+// which relays through a real connected Gmail account rather than a transactional
+// provider. Render's free tier blocks all outbound traffic on SMTP ports (25, 465,
+// 587) as of Sept 2025, so nodemailer/SMTP simply cannot work here -- the connection
+// hangs until it times out. EmailJS's API sends over normal HTTPS (port 443), which
+// is not blocked.
+//
+// Unlike Resend/Brevo/etc, EmailJS needs no domain verification -- it authenticates
+// as the actual Gmail account you connected via OAuth in the EmailJS dashboard, so it
+// can deliver to any real recipient from day one. Trade-off: the free tier caps out
+// at 200 requests/month, and does NOT support real file attachments (needs their paid
+// Personal plan). We don't need attachments anyway -- the QR code is already embedded
+// as an inline base64 <img> in the HTML body (see sendBookingConfirmation below), which
+// works on the free tier and displays identically in the recipient's inbox.
+//
+// EmailJS sends via a pre-built template with named placeholders (not raw HTML per
+// request) -- the template in the EmailJS dashboard should contain exactly one field,
+// {{message_html}}, so this file stays in full control of the actual email content.
 
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
-const BREVO_ACCOUNT_URL = 'https://api.brevo.com/v3/account';
+const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
 
 function env(key) {
   const v = process.env[key];
   return v ? v.trim() : v;
 }
 
-function apiKey() {
-  return env('BREVO_API_KEY');
-}
-
-// "Encore Tickets <no-reply@ticketbooking.local>" -> { name, email }
-function parseSender() {
-  const raw = env('SMTP_FROM') || '"Encore Tickets" <no-reply@ticketbooking.local>';
-  const match = raw.match(/^"?([^"<]*)"?\s*<([^>]+)>\s*$/);
-  if (match) {
-    return { name: match[1].trim() || undefined, email: match[2].trim() };
-  }
-  return { email: raw };
+function config() {
+  return {
+    serviceId: env('EMAILJS_SERVICE_ID'),
+    templateId: env('EMAILJS_TEMPLATE_ID'),
+    publicKey: env('EMAILJS_PUBLIC_KEY'),
+    privateKey: env('EMAILJS_PRIVATE_KEY'),
+  };
 }
 
 // Runs once at server startup (see server.js) so you get a clear pass/fail
 // log line right away instead of waiting for the first real booking.
 async function verifyEmailConfig() {
-  const key = apiKey();
-  if (!key) {
+  const { serviceId, templateId, publicKey, privateKey } = config();
+  const missing = [
+    !serviceId && 'EMAILJS_SERVICE_ID',
+    !templateId && 'EMAILJS_TEMPLATE_ID',
+    !publicKey && 'EMAILJS_PUBLIC_KEY',
+    !privateKey && 'EMAILJS_PRIVATE_KEY',
+  ].filter(Boolean);
+
+  if (missing.length) {
     console.error(
-      '[email] BREVO_API_KEY is not set -- emails will NOT be sent.\n' +
-      '  Fix: in your Brevo account go to Settings -> SMTP & API -> API Keys tab, ' +
-      'create a key, and add it as BREVO_API_KEY in Render -> your service -> Environment.'
+      `[email] Missing ${missing.join(', ')} -- emails will NOT be sent.\n` +
+      '  Fix: in your EmailJS dashboard, get the Service ID (Email Services), Template ID ' +
+      '(Email Templates), Public Key (Account -> API Keys), and Private Key ' +
+      '(Account -> Security), then add all four in Render -> your service -> Environment.'
     );
     return;
   }
-  try {
-    const res = await fetch(BREVO_ACCOUNT_URL, { headers: { 'api-key': key } });
-    if (res.ok) {
-      console.log('[email] Brevo API key OK -- real emails will be sent.');
-    } else {
-      const text = await res.text().catch(() => '');
-      console.error(`[email] Brevo API key check FAILED (status ${res.status}): ${text}`);
-    }
-  } catch (err) {
-    console.error('[email] Brevo API check errored:', err.message);
-  }
+  console.log(
+    '[email] EmailJS credentials present -- real emails will be sent via ' +
+    'your connected Gmail account (no domain verification needed, 200/month free tier).'
+  );
 }
 
-async function sendMail({ to, subject, html, attachments }) {
-  const key = apiKey();
-  if (!key) {
-    const err = new Error('BREVO_API_KEY not configured');
+async function sendMail({ to, subject, html }) {
+  const { serviceId, templateId, publicKey, privateKey } = config();
+  if (!serviceId || !templateId || !publicKey || !privateKey) {
+    const err = new Error('EmailJS is not fully configured (missing service/template/public/private key)');
     console.error(`[email] FAILED to send "${subject}" to ${to}: ${err.message}`);
     throw err;
   }
 
   const body = {
-    sender: parseSender(),
-    to: [{ email: to }],
-    subject,
-    htmlContent: html,
+    service_id: serviceId,
+    template_id: templateId,
+    user_id: publicKey,
+    accessToken: privateKey,
+    template_params: {
+      to_email: to,
+      subject,
+      message_html: html,
+    },
   };
-  if (attachments && attachments.length) {
-    // Brevo's API wants { name, content } where content is base64 (no data:
-    // URL prefix) and name must end in a real file extension.
-    body.attachment = attachments.map((a) => ({ name: a.filename, content: a.content }));
-  }
 
   let res;
   try {
-    res = await fetch(BREVO_API_URL, {
+    res = await fetch(EMAILJS_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'api-key': key },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch (err) {
@@ -86,13 +93,12 @@ async function sendMail({ to, subject, html, attachments }) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    console.error(`[email] FAILED to send "${subject}" to ${to}. Brevo status ${res.status}: ${text}`);
-    throw new Error(`Brevo API error ${res.status}: ${text}`);
+    console.error(`[email] FAILED to send "${subject}" to ${to}. EmailJS status ${res.status}: ${text}`);
+    throw new Error(`EmailJS API error ${res.status}: ${text}`);
   }
 
-  const data = await res.json().catch(() => ({}));
-  console.log(`[email] Sent "${subject}" to ${to} (messageId: ${data.messageId || 'n/a'})`);
-  return data;
+  console.log(`[email] Sent "${subject}" to ${to} via EmailJS.`);
+  return { ok: true };
 }
 
 async function sendBookingConfirmation({ to, customerName, event, seats, bookingRef, qrDataUrl, totalAmount }) {
@@ -115,9 +121,6 @@ async function sendBookingConfirmation({ to, customerName, event, seats, booking
     to,
     subject: `Booking Confirmed: ${event.title} (${bookingRef})`,
     html,
-    attachments: [
-      { filename: 'ticket-qr.png', content: qrDataUrl.split('base64,')[1] },
-    ],
   });
 }
 
