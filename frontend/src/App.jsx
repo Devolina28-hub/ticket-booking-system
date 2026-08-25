@@ -8,6 +8,8 @@ import PayConfirm from './pages/PayConfirm.jsx';
 import RoleSelect from './pages/RoleSelect.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import BookingHistory from './pages/BookingHistory.jsx';
 import MyWaitlist from './pages/MyWaitlist.jsx';
 import OrganiserDashboard from './pages/OrganiserDashboard.jsx';
@@ -47,6 +49,8 @@ export default function App() {
               <Route path="/login" element={<RoleSelect />} />
               <Route path="/login/:role" element={<Login setUser={setUser} />} />
               <Route path="/register/:role" element={<Register setUser={setUser} />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
 
               <Route
                 path="/my-bookings"

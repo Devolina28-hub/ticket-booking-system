@@ -74,4 +74,49 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/venues/:id
+ *
+ * Admin-only. Blocked if ANY booking exists for ANY event under this venue
+ * (covers both "the venue itself" and "any movie/event under it" from the
+ * spec, since every booking in this schema is always tied to an event, and
+ * every event is tied to exactly one venue). If clear, cascades: deletes
+ * every event under the venue first (each of those cascades its own
+ * event_pricing/event_seats/waitlist rows automatically), then the venue
+ * itself (cascades venue_seats automatically) -- so nothing is left
+ * orphaned. Stale payment_sessions for those events are cleaned up first
+ * for the same reason as the event-delete route above: they hold a foreign
+ * key to the event but aren't a "booking."
+ */
+router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const venue = await queryOne('SELECT * FROM venues WHERE id = $1', [req.params.id]);
+    if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+    const bookingCount = await queryOne(
+      `SELECT COUNT(*)::int as count FROM bookings b
+       JOIN events e ON e.id = b.event_id WHERE e.venue_id = $1`,
+      [venue.id]
+    );
+    if (bookingCount.count > 0) {
+      return res.status(409).json({
+        error: 'This venue cannot be deleted because one or more events/movies associated with this venue have existing bookings.',
+      });
+    }
+
+    await withTransaction(async (trx) => {
+      await trx.query(
+        `DELETE FROM payment_sessions WHERE event_id IN (SELECT id FROM events WHERE venue_id = $1)`,
+        [venue.id]
+      );
+      await trx.query('DELETE FROM events WHERE venue_id = $1', [venue.id]);
+      await trx.query('DELETE FROM venues WHERE id = $1', [venue.id]);
+    });
+
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

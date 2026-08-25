@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api, getUser } from '../api.js';
 import SeatGrid from '../components/SeatGrid.jsx';
 import PosterImageLayer from '../components/PosterImageLayer.jsx';
+import BackButton from '../components/BackButton.jsx';
 
 const MAX_SEATS = 5;
 const BOOKING_FEE = 49;
@@ -284,7 +285,7 @@ export default function EventSeatMap() {
   return (
     <div>
       <div className="back-link" style={{ marginBottom: 20 }}>
-        <button className="btn-link" onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, padding: 0 }}>← Back to events</button>
+        <BackButton onClick={() => navigate('/')}>Back to events</BackButton>
       </div>
 
       {isPreviewOnly && (

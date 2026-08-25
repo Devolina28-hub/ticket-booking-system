@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require('../auth');
 const { generateBookingRef, generateQrDataUrl } = require('../services/qr');
 const { sendBookingConfirmation } = require('../services/email');
 const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
+const { offerSeatToNextInLine } = require('../services/waitlistService');
 
 const router = express.Router();
 
@@ -130,6 +131,62 @@ router.post('/:id/complete', requireAuth, requireRole('customer'), async (req, r
     }).catch((err) => console.error('[waitlist] confirmation email failed:', err.message));
 
     res.status(201).json({ booking: { id: bookingId, booking_ref: bookingRef, total_amount: total, qr_data_url: qrDataUrl } });
+  } catch (err) {
+    res.status(409).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/waitlist/:id/leave
+ *
+ * Lets a customer remove themselves from the queue. Two cases:
+ *  - status='waiting': just mark cancelled. Position counts for everyone
+ *    behind them recompute automatically since /my's position query is
+ *    `COUNT(*) WHERE status='waiting' AND joined_at <= mine` -- once this
+ *    row's status flips away from 'waiting', it stops counting for anyone.
+ *  - status='offered': a seat is currently held FOR this customer
+ *    (event_seats.status='offered', held_by=them). Leaving must release
+ *    that seat back to available AND cascade the offer to the next person
+ *    in line for that category, exactly like a booking cancellation does --
+ *    otherwise the seat would sit reserved for someone who no longer wants it.
+ * Either way, once status is 'cancelled' they stop appearing in any
+ * "waiting"/"offered" query, so they get no further notifications or offers
+ * tied to this entry (GET /my still shows the entry itself, now marked
+ * Cancelled, as a normal history record).
+ */
+router.post('/:id/leave', requireAuth, requireRole('customer'), async (req, res) => {
+  try {
+    const entry = await queryOne('SELECT * FROM waitlist WHERE id = $1', [req.params.id]);
+    if (!entry) return res.status(404).json({ error: 'Waitlist entry not found' });
+    if (entry.customer_id !== req.user.id) return res.status(403).json({ error: 'Not your waitlist entry' });
+    if (!['waiting', 'offered'].includes(entry.status)) {
+      return res.status(409).json({ error: `This entry is already ${entry.status} and can't be left` });
+    }
+
+    let freedSeat = null;
+    await withTransaction(async (trx) => {
+      const updated = await trx.query(
+        `UPDATE waitlist SET status = 'cancelled' WHERE id = $1 AND status = $2 RETURNING id`,
+        [entry.id, entry.status]
+      );
+      if (updated.length === 0) throw new Error('This entry changed status just now -- please refresh and try again');
+
+      if (entry.status === 'offered' && entry.offered_seat_id) {
+        const seatRows = await trx.query(
+          `UPDATE event_seats SET status = 'available', held_by = NULL, hold_expires_at = NULL
+           WHERE id = $1 AND status = 'offered' AND held_by = $2
+           RETURNING *`,
+          [entry.offered_seat_id, req.user.id]
+        );
+        freedSeat = seatRows[0] || null;
+      }
+    });
+
+    if (freedSeat) {
+      await offerSeatToNextInLine(entry.event_id, freedSeat.category, freedSeat.id);
+    }
+
+    res.json({ left: true });
   } catch (err) {
     res.status(409).json({ error: err.message });
   }

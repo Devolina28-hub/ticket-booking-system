@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 
 export default function AdminVenues() {
@@ -8,12 +8,25 @@ export default function AdminVenues() {
   const [layout, setLayout] = useState([{ row_label: 'A', seats: 8, category: 'Premium' }]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
+  const listRef = useRef(null);
+  const newItemRef = useRef(null);
 
   async function load() {
     const data = await api.listVenues();
     setVenues(data.venues);
   }
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (highlightId && newItemRef.current) {
+      newItemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const t = setTimeout(() => setHighlightId(null), 2200);
+      return () => clearTimeout(t);
+    }
+  }, [highlightId, venues]);
 
   function updateRow(i, key, value) {
     setLayout((l) => l.map((row, idx) => idx === i ? { ...row, [key]: value } : row));
@@ -23,17 +36,39 @@ export default function AdminVenues() {
     e.preventDefault();
     setError(''); setSuccess('');
     try {
-      await api.createVenue({
+      const { venue: created } = await api.createVenue({
         name,
         address,
         layout: layout.map((r) => ({ row_label: r.row_label, seats: Number(r.seats), category: r.category })),
       });
-      setSuccess('Venue created with seat layout!');
+      setSuccess('Venue added successfully.');
       setName(''); setAddress('');
       setLayout([{ row_label: 'A', seats: 8, category: 'Premium' }]);
       await load();
+      if (created?.id) {
+        setHighlightId(created.id);
+      } else {
+        listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  async function deleteVenue(v) {
+    const confirmed = window.confirm(`Delete "${v.name}"? This can't be undone.`);
+    if (!confirmed) return;
+    setDeleteError('');
+    setDeletingId(v.id);
+    try {
+      await api.deleteVenue(v.id);
+      await load();
+    } catch (err) {
+      // Backend returns a 409 with a clear explanation when bookings exist
+      // for the venue or any event under it -- surfaced here verbatim.
+      setDeleteError(err.message);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -87,13 +122,29 @@ export default function AdminVenues() {
         </form>
       </div>
 
-      <div className="panel">
+      <div className="panel" ref={listRef}>
         <h2>Existing venues</h2>
+        {deleteError && <div className="alert alert-error">{deleteError}</div>}
         <div className="stack">
           {venues.map((v) => (
-            <div key={v.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(98,61,112,0.1)' }}>
-              <strong>{v.name}</strong>
-              <p className="muted" style={{ margin: 0 }}>{v.address}</p>
+            <div
+              key={v.id}
+              ref={v.id === highlightId ? newItemRef : null}
+              className={`row-between listing-row${v.id === highlightId ? ' listing-row-new' : ''}`}
+              style={{ padding: '10px 0' }}
+            >
+              <div>
+                <strong>{v.name}</strong>
+                <p className="muted" style={{ margin: 0 }}>{v.address}</p>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                disabled={deletingId === v.id}
+                onClick={() => deleteVenue(v)}
+                style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+              >
+                {deletingId === v.id ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           ))}
         </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { api, saveSession } from '../api.js';
 import AuthLayout from '../components/AuthLayout.jsx';
+import BackButton from '../components/BackButton.jsx';
 
 const ROLE_LABELS = { customer: 'Customer', organiser: 'Organiser' };
 
@@ -68,9 +69,9 @@ export default function Register({ setUser }) {
       <p className="muted" style={{ marginTop: 16 }}>
         Already have an account? <Link to={`/login/${role}`}>Log in</Link>
       </p>
-      <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-        <Link to="/login" className="portal-switch-link">← Choose a different portal</Link>
-      </p>
+      <div style={{ marginTop: 8 }}>
+        <BackButton to="/login" style={{ padding: '6px 12px 6px 8px', fontSize: 13 }}>Choose a different portal</BackButton>
+      </div>
     </AuthLayout>
   );
 }

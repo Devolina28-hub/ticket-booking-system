@@ -13,7 +13,12 @@ export default function OrganiserDashboard() {
   const [summaryError, setSummaryError] = useState('');
   const [selectedSummary, setSelectedSummary] = useState(null);
   const [loadingSummaryId, setLoadingSummaryId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [highlightId, setHighlightId] = useState(null);
   const summaryRef = useRef(null);
+  const listingsRef = useRef(null);
+  const newItemRef = useRef(null);
 
   async function load() {
     const [venueData, eventData] = await Promise.all([api.listVenues(), api.listEvents()]);
@@ -22,6 +27,18 @@ export default function OrganiserDashboard() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Once the newly-created event's row actually renders (after `events`
+  // updates and this component re-renders), scroll it into view and let the
+  // highlight animation play, then clear it so it doesn't re-trigger on
+  // unrelated re-renders.
+  useEffect(() => {
+    if (highlightId && newItemRef.current) {
+      newItemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const t = setTimeout(() => setHighlightId(null), 2200);
+      return () => clearTimeout(t);
+    }
+  }, [highlightId, events]);
 
   // Admins see every event's revenue; organisers only see their own listings here,
   // since the backend correctly rejects viewing another organiser's revenue (403) --
@@ -59,15 +76,27 @@ export default function OrganiserDashboard() {
     e.preventDefault();
     setError(''); setSuccess('');
     try {
-      await api.createEvent({
+      const { event: created } = await api.createEvent({
         ...form,
         venue_id: Number(form.venue_id),
-        pricing: pricing.map((p) => ({ category: p.category, price: Number(p.price) })),
+        pricing: pricing.map((p) => ({
+          category: p.category,
+          // Empty/blank price -> ₹200 default (also enforced server-side).
+          price: p.price === '' || p.price === null || p.price === undefined || Number.isNaN(Number(p.price))
+            ? 200
+            : Number(p.price),
+        })),
       });
-      setSuccess('Event created!');
+      const typeLabel = { movie: 'Movie', concert: 'Concert', event: 'Event' }[form.type] || 'Listing';
+      setSuccess(`${typeLabel} added successfully.`);
       setForm({ title: '', description: '', type: 'movie', venue_id: '', event_date: '', event_time: '', poster_url: '' });
       setPosterError('');
       await load();
+      if (created?.id) {
+        setHighlightId(created.id);
+      } else {
+        listingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -87,6 +116,24 @@ export default function OrganiserDashboard() {
       setSummaryError(err.message);
     } finally {
       setLoadingSummaryId(null);
+    }
+  }
+
+  async function deleteEvent(ev) {
+    const confirmed = window.confirm(`Delete "${ev.title}"? This can't be undone.`);
+    if (!confirmed) return;
+    setDeleteError('');
+    setDeletingId(ev.id);
+    try {
+      await api.deleteEvent(ev.id);
+      if (selectedSummary?.event?.id === ev.id) setSelectedSummary(null);
+      await load();
+    } catch (err) {
+      // Backend returns "This event cannot be deleted because it already has
+      // bookings." (409) when bookings exist -- surfaced here verbatim.
+      setDeleteError(err.message);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -163,7 +210,9 @@ export default function OrganiserDashboard() {
               </div>
               <div className="field">
                 <label>Price (₹)</label>
-                <input type="number" min="0" step="1" value={p.price} onChange={(e) => updatePricing(i, 'price', e.target.value)} required />
+                <input type="number" min="0" step="1" placeholder="Default: ₹200" value={p.price}
+                  onChange={(e) => updatePricing(i, 'price', e.target.value)} />
+                <p className="muted" style={{ fontSize: 11, margin: '4px 0 0' }}>Leave blank to use ₹200.</p>
               </div>
             </div>
           ))}
@@ -176,22 +225,38 @@ export default function OrganiserDashboard() {
         </form>
       </div>
 
-      <div className="panel">
+      <div className="panel" ref={listingsRef}>
         <h2>Your listings</h2>
         {summaryError && <div className="alert alert-error">{summaryError}</div>}
+        {deleteError && <div className="alert alert-error">{deleteError}</div>}
         {myEvents.length === 0 ? (
           <p className="muted">You haven't created any listings yet — use the form above.</p>
         ) : (
           <div className="stack">
             {myEvents.map((ev) => (
-              <div key={ev.id} className="row-between" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+              <div
+                key={ev.id}
+                ref={ev.id === highlightId ? newItemRef : null}
+                className={`row-between listing-row${ev.id === highlightId ? ' listing-row-new' : ''}`}
+                style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}
+              >
                 <div>
                   <strong>{ev.title}</strong>
                   <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>{ev.venue_name} · {ev.event_date}</p>
                 </div>
-                <button className="btn btn-secondary btn-sm" disabled={loadingSummaryId === ev.id} onClick={() => viewSummary(ev.id)}>
-                  {loadingSummaryId === ev.id ? 'Loading…' : 'View revenue'}
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary btn-sm" disabled={loadingSummaryId === ev.id} onClick={() => viewSummary(ev.id)}>
+                    {loadingSummaryId === ev.id ? 'Loading…' : 'View revenue'}
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={deletingId === ev.id}
+                    onClick={() => deleteEvent(ev)}
+                    style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+                  >
+                    {deletingId === ev.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -15,7 +15,10 @@
 //
 // EmailJS sends via a pre-built template with named placeholders (not raw HTML per
 // request) -- the template in the EmailJS dashboard should contain exactly one field,
-// {{message_html}}, so this file stays in full control of the actual email content.
+// {{{message_html}}} (THREE curly braces), so this file stays in full control of the
+// actual email content. Two braces ({{message_html}}) HTML-escapes the value by
+// default, which prints the <div>/<img>/etc tags as literal visible text instead of
+// rendering them -- if confirmation emails ever show raw HTML tags again, this is why.
 
 const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
 
@@ -139,4 +142,47 @@ async function sendWaitlistOffer({ to, customerName, event, seat, offerUrl, expi
   return sendMail({ to, subject: `Seat available for ${event.title} — act fast!`, html });
 }
 
-module.exports = { sendMail, sendBookingConfirmation, sendWaitlistOffer, verifyEmailConfig };
+// Sent after a cancellation + refund have ALREADY succeeded (see bookings.js
+// /:id/cancel) -- never call this speculatively or before the refund logic
+// has actually completed, since it unconditionally states the refund succeeded.
+async function sendCancellationRefund({ to, customerName, event, bookingRef, refundAmount }) {
+  const html = `
+    <div style="font-family: sans-serif; max-width:520px; margin:auto;">
+      <h2 style="color:#4340C9;">Ticket Cancelled &amp; Refund Successful</h2>
+      <p>Hi ${customerName},</p>
+      <p>Your ticket${event ? ` for <strong>${event.title}</strong>` : ''} has been successfully cancelled.</p>
+      ${bookingRef ? `<p><strong>Booking Reference:</strong> ${bookingRef}</p>` : ''}
+      <p><strong>Refund Amount:</strong> ₹${Number(refundAmount).toFixed(0)}</p>
+      <p>The refund has been successfully processed.</p>
+      <p>Thank you for using Encore Tickets.</p>
+    </div>
+  `;
+  return sendMail({ to, subject: 'Ticket Cancelled & Refund Successful', html });
+}
+
+// The reset link points at the FRONTEND (not this API) -- FRONTEND_URL must be
+// set to the real deployed frontend origin or this link only works locally.
+async function sendPasswordReset({ to, customerName, resetUrl, expiresInMinutes }) {
+  const html = `
+    <div style="font-family: sans-serif; max-width:520px; margin:auto;">
+      <h2 style="color:#4340C9;">Reset Your Password</h2>
+      <p>Hi ${customerName || 'there'},</p>
+      <p>Your password reset request has been received.</p>
+      <p>Click the button below to create a new password:</p>
+      <p><a href="${resetUrl}" style="background:linear-gradient(135deg,#5b5cf0,#8b5cf6);color:#fff;
+      padding:12px 24px;border-radius:999px;text-decoration:none;display:inline-block;">Reset Password</a></p>
+      <p style="color:#6b6b85;font-size:13px;">This link will expire in ${expiresInMinutes} minutes.</p>
+      <p style="color:#6b6b85;font-size:13px;">If you did not request a password reset, you can safely ignore this email.</p>
+    </div>
+  `;
+  return sendMail({ to, subject: 'Reset Your Password', html });
+}
+
+module.exports = {
+  sendMail,
+  sendBookingConfirmation,
+  sendWaitlistOffer,
+  sendCancellationRefund,
+  sendPasswordReset,
+  verifyEmailConfig,
+};

@@ -3,6 +3,8 @@ const { query, queryOne, withTransaction } = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
 
+const DEFAULT_SEAT_PRICE = Number(process.env.DEFAULT_SEAT_PRICE || 200);
+
 const router = express.Router();
 
 // Browse + filter events (public). Query params: type, date, q (title search)
@@ -106,8 +108,16 @@ router.post('/', requireAuth, requireRole('organiser', 'admin'), async (req, res
       );
 
       for (const p of pricing) {
+        // Organiser left the price field empty -> default to ₹200. Checked
+        // here (not just in the frontend) so a direct API call, or a UI bug
+        // that lets an empty/invalid value through, can't create a $0 or
+        // NaN-priced category.
+        const priceNum = Number(p.price);
+        const price = p.price === '' || p.price === null || p.price === undefined || Number.isNaN(priceNum)
+          ? DEFAULT_SEAT_PRICE
+          : priceNum;
         await trx.query('INSERT INTO event_pricing (event_id, category, price) VALUES ($1, $2, $3)', [
-          eventRow.id, p.category, p.price,
+          eventRow.id, p.category, price,
         ]);
       }
 
@@ -156,6 +166,46 @@ router.get('/:id/summary', requireAuth, requireRole('organiser', 'admin'), async
     );
 
     res.json({ event, bookings, revenue: Number(revenueRow.total), seatCounts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/events/:id
+ *
+ * Organiser can delete their own event/movie -- admin can delete any --
+ * but ONLY if no bookings (confirmed or cancelled; a cancelled booking is
+ * still a historical record worth protecting) exist for it. This is
+ * enforced here explicitly (clear 409 + message) rather than just letting
+ * the bookings.event_id foreign key reject the DELETE, so the frontend gets
+ * a readable reason instead of a raw constraint-violation error.
+ *
+ * Stale payment_sessions rows (declined/expired checkout attempts that never
+ * became a booking) don't count as "bookings" but DO hold a foreign key to
+ * this event, so they're cleaned up here too -- otherwise deletion would
+ * fail on THOSE even with zero real bookings. event_pricing, event_seats,
+ * and waitlist rows all cascade automatically via their table definitions.
+ */
+router.delete('/:id', requireAuth, requireRole('organiser', 'admin'), async (req, res) => {
+  try {
+    const event = await queryOne('SELECT * FROM events WHERE id = $1', [req.params.id]);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+    if (req.user.role !== 'admin' && event.organiser_id !== req.user.id) {
+      return res.status(403).json({ error: 'Not your event' });
+    }
+
+    const bookingCount = await queryOne('SELECT COUNT(*)::int as count FROM bookings WHERE event_id = $1', [event.id]);
+    if (bookingCount.count > 0) {
+      return res.status(409).json({ error: 'This event cannot be deleted because it already has bookings.' });
+    }
+
+    await withTransaction(async (trx) => {
+      await trx.query('DELETE FROM payment_sessions WHERE event_id = $1', [event.id]);
+      await trx.query('DELETE FROM events WHERE id = $1', [event.id]);
+    });
+
+    res.json({ deleted: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

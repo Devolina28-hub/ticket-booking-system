@@ -138,10 +138,10 @@ export default function PayConfirm() {
           {event?.venue_name} · {event?.event_date} · {event?.event_time}
         </p>
 
-        <div style={{ textAlign: 'left', background: 'var(--surface2)', borderRadius: 14, padding: 20, marginBottom: 20 }}>
-          <div className="price-row"><span>Seats</span><span>{seat_count}</span></div>
-          <div className="price-row"><span>Persons</span><span>{seat_count}</span></div>
-          <div className="price-row total"><span>Amount</span><span>₹{Number(amount).toFixed(0)}</span></div>
+        <div className="pay-detail-box">
+          <div className="pay-detail-row"><span>Seats</span><span>{seat_count}</span></div>
+          <div className="pay-detail-row"><span>Number of Persons</span><span>{seat_count}</span></div>
+          <div className="pay-detail-row pay-detail-total"><span>Amount</span><span>₹{Number(amount).toFixed(0)}</span></div>
         </div>
 
         {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}

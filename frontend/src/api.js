@@ -27,10 +27,13 @@ export const api = {
   register: (payload) => request('/auth/register', { method: 'POST', body: payload, auth: false }),
   login: (payload) => request('/auth/login', { method: 'POST', body: payload, auth: false }),
   me: () => request('/auth/me'),
+  forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: { email }, auth: false }),
+  resetPassword: (token, password) => request('/auth/reset-password', { method: 'POST', body: { token, password }, auth: false }),
 
   listVenues: () => request('/venues', { auth: false }),
   getVenue: (id) => request(`/venues/${id}`, { auth: false }),
   createVenue: (payload) => request('/venues', { method: 'POST', body: payload }),
+  deleteVenue: (id) => request(`/venues/${id}`, { method: 'DELETE' }),
 
   listEvents: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -38,6 +41,7 @@ export const api = {
   },
   getEvent: (id) => request(`/events/${id}`, { auth: false }),
   createEvent: (payload) => request('/events', { method: 'POST', body: payload }),
+  deleteEvent: (id) => request(`/events/${id}`, { method: 'DELETE' }),
   eventSummary: (id) => request(`/events/${id}/summary`),
 
   getSeats: (eventId) => request(`/events/${eventId}/seats`, { auth: false }),
@@ -56,6 +60,7 @@ export const api = {
   joinWaitlist: (payload) => request('/waitlist', { method: 'POST', body: payload }),
   myWaitlist: () => request('/waitlist/my'),
   completeWaitlistOffer: (id) => request(`/waitlist/${id}/complete`, { method: 'POST' }),
+  leaveWaitlist: (id) => request(`/waitlist/${id}/leave`, { method: 'POST' }),
 
   verifyTicket: async (bookingRef) => {
     const res = await fetch(BASE + `/bookings/verify/${bookingRef}`);

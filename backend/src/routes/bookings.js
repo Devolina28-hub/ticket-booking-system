@@ -2,7 +2,7 @@ const express = require('express');
 const { query, queryOne, withTransaction } = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 const { generateBookingRef, generateQrDataUrl } = require('../services/qr');
-const { sendBookingConfirmation } = require('../services/email');
+const { sendBookingConfirmation, sendCancellationRefund } = require('../services/email');
 const { offerSeatToNextInLine } = require('../services/waitlistService');
 const { releaseExpiredHoldsNow } = require('../services/holdSweeper');
 
@@ -196,6 +196,26 @@ router.post('/:id/cancel', requireAuth, requireRole('customer', 'admin'), async 
 
     for (const seat of freedSeats) {
       await offerSeatToNextInLine(booking.event_id, seat.category, seat.id);
+    }
+
+    // Only reached after the cancellation transaction above has already
+    // committed successfully -- never send a "refund successful" email
+    // speculatively or before this point. This is a mock payment system (no
+    // real payment gateway, see payments.js), so "refund processed" here
+    // means the booking's total_amount, which the customer's mock payment
+    // covered, is being returned -- there's no separate gateway call that
+    // could fail after this; if it were wired to a real processor, the
+    // email send below would need to move after that call's own success check.
+    const customer = await queryOne('SELECT * FROM users WHERE id = $1', [booking.customer_id]);
+    const event = await queryOne('SELECT * FROM events WHERE id = $1', [booking.event_id]);
+    if (customer) {
+      sendCancellationRefund({
+        to: customer.email,
+        customerName: customer.name,
+        event,
+        bookingRef: booking.booking_ref,
+        refundAmount: booking.total_amount,
+      }).catch((err) => console.error('[bookings] refund email failed:', err.message));
     }
 
     res.json({ cancelled: true, freedSeats: freedSeats.length });

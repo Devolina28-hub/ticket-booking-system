@@ -198,6 +198,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_active_unique
 
 CREATE INDEX IF NOT EXISTS idx_waitlist_queue ON waitlist(event_id, category, status, joined_at);
 
+-- Password reset tokens. We store only a SHA-256 hash of the raw token (never
+-- the token itself) so a database leak alone can't be used to reset accounts.
+-- used_at enforces single-use; expires_at enforces the short validity window.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+
 -- Migration for databases created before poster uploads existed -- a no-op
 -- once the column is already present (including on brand-new databases,
 -- where CREATE TABLE above already added it).
